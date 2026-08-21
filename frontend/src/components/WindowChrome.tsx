@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { domainDisplayName } from "@/lib/genlayerClient";
 import WalletConnectButton from "./WalletConnectButton";
+import NetworkSwitcher from "./NetworkSwitcher";
 import {
   AppIconMark,
   BackIcon,
@@ -133,6 +134,7 @@ export default function WindowChrome({ children }: { children: React.ReactNode }
           <Link href="/docs" className="toolbar-btn border border-transparent hover:border-chrome-border">
             Help
           </Link>
+          <NetworkSwitcher />
           <div className="ml-1 scale-90">
             <WalletConnectButton />
           </div>

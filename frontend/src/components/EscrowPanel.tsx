@@ -5,13 +5,16 @@ import { formatEther } from "viem";
 import { useAccount } from "wagmi";
 import { withdrawEscrow } from "@/lib/genlayerClient";
 import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
+import type { GenLayerNetworkKey } from "@/lib/genlayerConfig";
 
 export default function EscrowPanel({
+  network,
   caseId,
   escrowWei,
   escrowWithdrawn,
   submitter,
 }: {
+  network: GenLayerNetworkKey;
   caseId: string;
   escrowWei: string;
   escrowWithdrawn: boolean;
@@ -33,7 +36,7 @@ export default function EscrowPanel({
     setStatus("pending");
     try {
       const { provider, account } = await getConnectedProviderAndAccount();
-      await withdrawEscrow(caseId, provider, account);
+      await withdrawEscrow(network, caseId, provider, account);
       setStatus("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Withdrawal failed.");

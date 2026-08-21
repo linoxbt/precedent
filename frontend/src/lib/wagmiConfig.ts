@@ -1,7 +1,7 @@
 import { cookieStorage, createStorage } from "wagmi";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import type { AppKitNetwork } from "@reown/appkit/networks";
-import { genlayerAsimovTestnet } from "./chains";
+import { genlayerTestnet, genlayerStudioNetwork } from "./chains";
 
 export const REOWN_PROJECT_ID = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID ?? "";
 
@@ -10,7 +10,7 @@ if (!REOWN_PROJECT_ID) {
   console.warn("NEXT_PUBLIC_REOWN_PROJECT_ID is not set: wallet connect will not initialize.");
 }
 
-export const networks: [AppKitNetwork, ...AppKitNetwork[]] = [genlayerAsimovTestnet];
+export const networks: [AppKitNetwork, ...AppKitNetwork[]] = [genlayerTestnet, genlayerStudioNetwork];
 
 export const wagmiAdapter = new WagmiAdapter({
   storage: createStorage({ storage: cookieStorage }),

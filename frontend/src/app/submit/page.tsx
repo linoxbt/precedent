@@ -6,7 +6,8 @@ import { useAccount } from "wagmi";
 import { formatEther, parseEther } from "viem";
 import { listDomains, submitCase, domainDisplayName } from "@/lib/genlayerClient";
 import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
-import { isContractConfigured } from "@/lib/genlayerConfig";
+import { isContractConfigured, GENLAYER_NETWORKS } from "@/lib/genlayerConfig";
+import { useActiveNetwork } from "@/lib/NetworkProvider";
 import ValidatorProgress from "@/components/ValidatorProgress";
 import { NewFileIcon, WindowDots } from "@/components/icons";
 import type { DomainConfig } from "@/lib/types";
@@ -14,6 +15,7 @@ import type { DomainConfig } from "@/lib/types";
 export default function SubmitCasePage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
+  const { network } = useActiveNetwork();
 
   const [domains, setDomains] = useState<DomainConfig[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(true);
@@ -28,18 +30,19 @@ export default function SubmitCasePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isContractConfigured()) {
+    if (!isContractConfigured(network)) {
       setDomainsLoading(false);
       return;
     }
-    listDomains()
+    setDomainsLoading(true);
+    listDomains(network)
       .then((d) => {
         setDomains(d);
         if (d.length > 0) setDomain(d[0].tag);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load domains."))
       .finally(() => setDomainsLoading(false));
-  }, []);
+  }, [network]);
 
   function updateEvidence(i: number, value: string) {
     setEvidenceRefs((refs) => refs.map((r, idx) => (idx === i ? value : r)));
@@ -90,6 +93,7 @@ export default function SubmitCasePage() {
     try {
       const { provider, account } = await getConnectedProviderAndAccount();
       const { caseId } = await submitCase(
+        network,
         {
           domain,
           description,
@@ -109,15 +113,16 @@ export default function SubmitCasePage() {
     }
   }
 
-  if (!isContractConfigured()) {
+  if (!isContractConfigured(network)) {
     return (
       <div className="flex flex-1 items-start justify-center p-8">
         <div className="panel max-w-md p-6 text-sm text-ink-muted">
-          No contract is configured yet (NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS is unset). See the{" "}
+          No contract is configured on {GENLAYER_NETWORKS[network].label} yet (its
+          NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_* env var is unset). See the{" "}
           <a href="/docs" className="font-medium text-accent-600 underline">
             Help
           </a>{" "}
-          window for deployment instructions.
+          window for deployment instructions, or switch networks above.
         </div>
       </div>
     );
@@ -134,8 +139,8 @@ export default function SubmitCasePage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 bg-white p-5">
           <p className="text-xs leading-relaxed text-ink-faint">
-            This opens a real transaction on GenLayer Asimov Testnet: validators draft and grade
-            a ruling against the domain&apos;s existing precedent. May take up to a minute.
+            This opens a real transaction on {GENLAYER_NETWORKS[network].label}: validators draft
+            and grade a ruling against the domain&apos;s existing precedent. May take up to a minute.
           </p>
 
           <div>

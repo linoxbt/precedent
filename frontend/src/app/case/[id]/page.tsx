@@ -13,6 +13,9 @@ import StatusBar from "@/components/StatusBar";
 import EscrowPanel from "@/components/EscrowPanel";
 import { DocumentIcon } from "@/components/icons";
 import { formatEther } from "viem";
+import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
+
+export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -23,15 +26,16 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function CaseRulingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [caseRecord, ruling] = await Promise.all([getCase(id), getRuling(id)]);
+  const network = await getActiveNetworkServer();
+  const [caseRecord, ruling] = await Promise.all([getCase(network, id), getRuling(network, id)]);
 
   if (!caseRecord || !ruling) {
     notFound();
   }
 
   const [domain, precedents] = await Promise.all([
-    getDomain(caseRecord.domain),
-    getDomainPrecedents(caseRecord.domain),
+    getDomain(network, caseRecord.domain),
+    getDomainPrecedents(network, caseRecord.domain),
   ]);
 
   return (
@@ -108,6 +112,7 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
               </div>
             )}
             <EscrowPanel
+              network={network}
               caseId={caseRecord.id}
               escrowWei={caseRecord.escrow}
               escrowWithdrawn={caseRecord.escrowWithdrawn}

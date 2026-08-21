@@ -7,20 +7,24 @@ import {
   getRuling,
   outcomeLabel,
 } from "@/lib/genlayerClient";
+import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
 import AppealPanel from "@/components/AppealPanel";
 import { GavelIcon, WindowDots } from "@/components/icons";
 
+export const dynamic = "force-dynamic";
+
 export default async function AppealPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [caseRecord, ruling] = await Promise.all([getCase(id), getRuling(id)]);
+  const network = await getActiveNetworkServer();
+  const [caseRecord, ruling] = await Promise.all([getCase(network, id), getRuling(network, id)]);
 
   if (!caseRecord || !ruling) {
     notFound();
   }
 
   const [domain, existingAppeal] = await Promise.all([
-    getDomain(caseRecord.domain),
-    getAppeal(id),
+    getDomain(network, caseRecord.domain),
+    getAppeal(network, id),
   ]);
 
   return (
@@ -44,7 +48,12 @@ export default async function AppealPage({ params }: { params: Promise<{ id: str
           </p>
         </div>
 
-        <AppealPanel caseId={caseRecord.id} originalRuling={ruling} existingAppeal={existingAppeal} />
+        <AppealPanel
+          network={network}
+          caseId={caseRecord.id}
+          originalRuling={ruling}
+          existingAppeal={existingAppeal}
+        />
       </div>
     </div>
   );
