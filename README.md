@@ -96,23 +96,26 @@ whoever deploys next:
 
 ## Frontend (`frontend/`)
 
-Next.js 16 (App Router) + TypeScript + Tailwind, styled per the spec's UI brief: a
-legal-tech / case-management look (deep navy `#1f3a5f` + off-white, serif display headings,
-card layouts) rather than a typical crypto dashboard.
+Next.js 16 (App Router) + TypeScript + Tailwind, styled as a desktop file-explorer interface —
+a title bar, a toolbar with back/forward/up/refresh and a breadcrumb address bar, a left
+navigation pane listing domains as folders, and a status bar — rather than a typical crypto
+dashboard or a conventional web layout. Domains are folders, cases are documents you open,
+appeals are Properties dialogs, and submitting a case opens a New Item dialog.
 
-Pages:
-- **`/`** — Landing page: hero, how-it-works, feature highlights, CTA.
-- **`/dashboard`** — Domain Dashboard: registered domains with live on-chain precedent counts.
-- **`/submit`** — Submit Case: domain picker (populated from `list_domains`), description,
+Pages (mapped onto the file-explorer metaphor):
+- **`/`** — Landing / welcome screen: hero, pinned shortcuts, how-it-works, feature highlights.
+- **`/dashboard`** — "This PC": registered domains rendered as folders with live on-chain item counts.
+- **`/submit`** — "New Case" dialog: domain picker (populated from `list_domains`), description,
   evidence links, "Validators reviewing..." state while the real transaction confirms.
-- **`/case/[id]`** — Case & Ruling View: verdict card + rationale where every "Precedent #ID"
+- **`/case/[id]`** — An opened case document: verdict + rationale where every "Precedent #ID"
   mention is a clickable chip that expands that precedent inline (hydrated from `get_case` +
   `get_ruling` for each cited ID).
-- **`/appeal/[id]`** — Appeal Flow: bond input, posts a real `appeal` transaction, shows the
-  actual validator count from the transaction receipt's `lastRound.roundValidators`.
-- **`/explorer/[domain]`** — Precedent Explorer: searchable, expandable list of a domain's
-  case law, read live from `get_domain_precedents`.
-- **`/docs`** — Architecture, full contract API reference, and deploy-your-own instructions.
+- **`/appeal/[id]`** — A "Properties" dialog: bond input, posts a real `appeal` transaction,
+  shows the actual validator count from the transaction receipt's `lastRound.roundValidators`.
+- **`/explorer/[domain]`** — An opened folder: a details-view file list of a domain's case law
+  (Name / Outcome / Confidence / Round columns), read live from `get_domain_precedents`.
+- **`/docs`** — Help window: architecture, full contract API reference, and deploy-your-own
+  instructions.
 
 **Wallet connection** is Reown AppKit (`@reown/appkit` + `wagmi`), configured for a custom
 GenLayer Asimov Testnet chain definition (`src/lib/chains.ts`). `src/lib/walletProvider.ts`

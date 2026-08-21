@@ -12,25 +12,21 @@ export default function ValidatorProgress({ activeStep }: { activeStep: number }
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="h-7 w-7 animate-pulse-soft rounded-full border-2 border-navy-300 bg-navy-100"
+            className="h-6 w-6 animate-pulse-soft rounded-full border-2 border-accent-400 bg-accent-100"
             style={{ animationDelay: `${i * 0.15}s` }}
           />
         ))}
-        <span className="ml-2 text-sm font-medium text-navy-600">Validators reviewing...</span>
+        <span className="ml-2 text-sm font-medium text-ink-muted">Validators reviewing...</span>
       </div>
       <ul className="flex flex-col gap-1.5">
         {STEPS.map((step, i) => (
           <li
             key={step}
             className={`flex items-center gap-2 text-xs transition-colors ${
-              i <= activeStep ? "text-navy-700" : "text-navy-300"
+              i <= activeStep ? "text-ink" : "text-ink-faint"
             }`}
           >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                i <= activeStep ? "bg-gold" : "bg-navy-200"
-              }`}
-            />
+            <span className={`h-1.5 w-1.5 rounded-full ${i <= activeStep ? "bg-accent-500" : "bg-chrome-border"}`} />
             {step}
           </li>
         ))}

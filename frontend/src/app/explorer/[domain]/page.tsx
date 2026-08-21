@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { domainDisplayName, getDomain, getDomainPrecedents } from "@/lib/genlayerClient";
 import ExplorerTable from "@/components/ExplorerTable";
+import StatusBar from "@/components/StatusBar";
+import { FolderIcon } from "@/components/icons";
 
 export default async function PrecedentExplorerPage({ params }: { params: Promise<{ domain: string }> }) {
   const { domain: domainTag } = await params;
@@ -12,14 +14,22 @@ export default async function PrecedentExplorerPage({ params }: { params: Promis
   const precedents = await getDomainPrecedents(domainTag);
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gold">Precedent Explorer</p>
-      <h1 className="font-serif text-3xl font-semibold text-navy-900">{domainDisplayName(domain.tag)}</h1>
-      <p className="mt-2 max-w-2xl text-sm text-navy-500">{domain.rubric}</p>
-
-      <div className="mt-8">
-        <ExplorerTable precedents={precedents} />
+    <div className="flex flex-1 flex-col">
+      <div className="flex items-center gap-3 border-b border-chrome-border px-4 py-3">
+        <span className="h-8 w-9 shrink-0">
+          <FolderIcon />
+        </span>
+        <div className="min-w-0">
+          <h1 className="truncate text-sm font-semibold text-ink">{domainDisplayName(domain.tag)}</h1>
+          <p className="truncate text-xs text-ink-faint">{domain.rubric}</p>
+        </div>
       </div>
+
+      <ExplorerTable precedents={precedents} />
+
+      <StatusBar>
+        <span>{precedents.length} {precedents.length === 1 ? "item" : "items"}</span>
+      </StatusBar>
     </div>
   );
 }

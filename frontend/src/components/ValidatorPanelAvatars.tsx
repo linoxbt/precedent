@@ -1,4 +1,4 @@
-const COLORS = ["#1f3a5f", "#3d6690", "#5c85ac", "#b8924a", "#82a2c1", "#2c5074"];
+const COLORS = ["#0f6cbd", "#2f8fd6", "#0c5aa0", "#c9822a", "#1e8e5a", "#0a4a84"];
 
 export default function ValidatorPanelAvatars({ count, pulsing = false }: { count: number; pulsing?: boolean }) {
   return (
@@ -6,7 +6,7 @@ export default function ValidatorPanelAvatars({ count, pulsing = false }: { coun
       {Array.from({ length: count }).map((_, i) => (
         <span
           key={i}
-          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-parchment-100 text-xs font-semibold text-parchment-100 shadow-sm transition-all duration-300 animate-fade-in ${
+          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-xs font-semibold text-white shadow-sm transition-all duration-300 animate-fade-in ${
             pulsing ? "animate-pulse-soft" : ""
           }`}
           style={{

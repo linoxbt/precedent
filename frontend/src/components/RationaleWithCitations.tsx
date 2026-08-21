@@ -44,10 +44,10 @@ export default function RationaleWithCitations({
         type="button"
         onClick={() => known && toggle(id)}
         disabled={!known}
-        className={`mx-0.5 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm font-medium transition-all ${
+        className={`mx-0.5 inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-sm font-medium transition-all ${
           isExpanded
-            ? "border-gold bg-gold text-parchment-100"
-            : "border-gold-light/70 bg-gold-light/15 text-navy-800 hover:border-gold hover:bg-gold-light/30"
+            ? "border-accent-600 bg-accent-500 text-white"
+            : "border-accent-400/50 bg-accent-50 text-accent-700 hover:border-accent-500 hover:bg-accent-100"
         } ${known ? "cursor-pointer" : "cursor-default opacity-70"}`}
         title={known ? "Click to expand this precedent" : "Precedent not in local index"}
       >
@@ -63,7 +63,7 @@ export default function RationaleWithCitations({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-base leading-relaxed text-navy-700">{segments}</p>
+      <p className="text-base leading-relaxed text-ink">{segments}</p>
       {seenInOrder
         .filter((id) => expanded.has(id) && precedentById.has(id))
         .map((id) => (

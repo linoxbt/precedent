@@ -1,21 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { outcomeLabel } from "@/lib/genlayerClient";
+import { DocumentIcon, SearchIcon } from "./icons";
 import type { Precedent } from "@/lib/types";
 
-export default function ExplorerTable({ precedents }: { precedents: Precedent[] }) {
-  const [query, setQuery] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+const STATUS_TONE: Record<string, string> = {
+  full_refund: "#c9822a",
+  no_refund: "#1e8e5a",
+};
 
-  useEffect(() => {
-    const hash = typeof window !== "undefined" ? window.location.hash.replace("#", "") : "";
-    if (hash) {
-      setExpandedId(hash);
-      const el = document.getElementById(hash);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, []);
+export default function ExplorerTable({ precedents }: { precedents: Precedent[] }) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -29,48 +28,63 @@ export default function ExplorerTable({ precedents }: { precedents: Precedent[] 
   }, [precedents, query]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <input
-        className="input max-w-sm"
-        placeholder="Search precedents by keyword or outcome..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+    <div className="flex flex-1 flex-col">
+      <div className="flex items-center gap-2 border-b border-chrome-border bg-chrome-pane px-3 py-2">
+        <div className="flex w-64 items-center gap-2 rounded-sm border border-chrome-border bg-white px-2.5 py-1.5">
+          <SearchIcon className="h-3.5 w-3.5 text-ink-faint" />
+          <input
+            className="w-full bg-transparent text-xs text-ink placeholder:text-ink-faint focus:outline-none"
+            placeholder="Search this folder"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <span className="text-xs text-ink-faint">{filtered.length} of {precedents.length} items</span>
+      </div>
 
-      <div className="card overflow-hidden">
-        <div className="grid grid-cols-[110px_1fr_140px_60px] gap-4 border-b border-navy-100 bg-navy-50/60 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-navy-500">
-          <span>Case ID</span>
-          <span>Summary</span>
+      <div className="flex-1 overflow-x-auto">
+        <div className="grid min-w-[640px] grid-cols-[1fr_140px_110px_90px] gap-3 border-b border-chrome-border bg-chrome-pane px-4 py-1.5 text-xs font-semibold text-ink-muted">
+          <span>Name</span>
           <span>Outcome</span>
-          <span />
+          <span>Confidence</span>
+          <span>Round</span>
         </div>
 
         {filtered.length === 0 && (
-          <p className="px-5 py-8 text-center text-sm text-navy-400">No precedents match &quot;{query}&quot;.</p>
+          <p className="px-4 py-10 text-center text-sm text-ink-faint">No items match &quot;{query}&quot;.</p>
         )}
 
         {filtered.map((p) => {
-          const isOpen = expandedId === p.caseId;
+          const isSelected = selected === p.caseId;
           return (
-            <div key={p.caseId} id={p.caseId} className="border-b border-navy-100 last:border-b-0">
+            <div
+              key={p.caseId}
+              id={p.caseId}
+              onClick={() => setSelected(p.caseId)}
+              onDoubleClick={() => router.push(`/case/${p.caseId}`)}
+              className={`grid min-w-[640px] cursor-default grid-cols-[1fr_140px_110px_90px] items-center gap-3 border-b border-chrome-border/60 px-4 py-2 text-sm ${
+                isSelected ? "bg-chrome-selected" : "hover:bg-chrome-hover"
+              }`}
+            >
               <button
                 type="button"
-                onClick={() => setExpandedId(isOpen ? null : p.caseId)}
-                className="grid w-full grid-cols-[110px_1fr_140px_60px] items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-navy-50/40"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/case/${p.caseId}`);
+                }}
+                className="flex min-w-0 items-center gap-2.5 text-left"
               >
-                <span className="font-mono text-xs font-semibold text-navy-700">#{p.caseId}</span>
-                <span className="truncate text-sm text-navy-600">{p.description}</span>
-                <span className="text-sm font-medium text-navy-800">{outcomeLabel(p.outcome)}</span>
-                <span className="text-right text-navy-400">{isOpen ? "−" : "+"}</span>
+                <span className="h-6 w-5 shrink-0">
+                  <DocumentIcon tone={STATUS_TONE[p.outcome] ?? "#0f6cbd"} />
+                </span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate font-medium text-ink hover:underline">#{p.caseId}.ruling</span>
+                  <span className="truncate text-xs text-ink-faint">{p.description}</span>
+                </span>
               </button>
-              {isOpen && (
-                <div className="animate-fade-in bg-navy-50/40 px-5 pb-5">
-                  <p className="text-sm leading-relaxed text-navy-600">{p.rationale}</p>
-                  <p className="mt-3 text-xs text-navy-400">
-                    Confidence {(p.confidence * 100).toFixed(0)}% · Round {p.round} · {new Date(p.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
+              <span className="text-ink-muted">{outcomeLabel(p.outcome)}</span>
+              <span className="text-ink-muted">{(p.confidence * 100).toFixed(0)}%</span>
+              <span className="text-ink-muted">Round {p.round}</span>
             </div>
           );
         })}
