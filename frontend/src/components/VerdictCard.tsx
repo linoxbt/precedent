@@ -1,4 +1,4 @@
-import { outcomeLabel } from "@/lib/mockData";
+import { outcomeLabel } from "@/lib/genlayerClient";
 
 function confidenceTone(confidence: number) {
   if (confidence >= 0.85) return { label: "High confidence", classes: "bg-emerald-50 text-emerald-700 border-emerald-200" };

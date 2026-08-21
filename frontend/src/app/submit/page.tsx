@@ -1,22 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DOMAINS } from "@/lib/mockData";
-import { submitCase } from "@/lib/genlayerClient";
+import { useAccount } from "wagmi";
+import { listDomains, submitCase, domainDisplayName } from "@/lib/genlayerClient";
+import { getConnectedProvider } from "@/lib/walletProvider";
+import { isContractConfigured } from "@/lib/genlayerConfig";
 import ValidatorProgress from "@/components/ValidatorProgress";
-
-const MOCK_SUBMITTER = "0x2b6a...19fd";
+import type { DomainConfig } from "@/lib/types";
 
 export default function SubmitCasePage() {
   const router = useRouter();
-  const [domain, setDomain] = useState(DOMAINS[0].tag);
+  const { address, isConnected } = useAccount();
+
+  const [domains, setDomains] = useState<DomainConfig[]>([]);
+  const [domainsLoading, setDomainsLoading] = useState(true);
+  const [domain, setDomain] = useState("");
   const [description, setDescription] = useState("");
   const [respondent, setRespondent] = useState("");
   const [evidenceRefs, setEvidenceRefs] = useState<string[]>([""]);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isContractConfigured()) {
+      setDomainsLoading(false);
+      return;
+    }
+    listDomains()
+      .then((d) => {
+        setDomains(d);
+        if (d.length > 0) setDomain(d[0].tag);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load domains."))
+      .finally(() => setDomainsLoading(false));
+  }, []);
 
   function updateEvidence(i: number, value: string) {
     setEvidenceRefs((refs) => refs.map((r, idx) => (idx === i ? value : r)));
@@ -36,6 +55,10 @@ export default function SubmitCasePage() {
       setError("Case description is required.");
       return;
     }
+    if (!isConnected) {
+      setError("Connect a wallet before submitting a case.");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     setStep(0);
@@ -45,13 +68,16 @@ export default function SubmitCasePage() {
     );
 
     try {
-      const { caseId } = await submitCase({
-        domain,
-        description,
-        evidenceRefs: evidenceRefs.filter((r) => r.trim().length > 0),
-        submitter: MOCK_SUBMITTER,
-        respondent,
-      });
+      const provider = await getConnectedProvider();
+      const { caseId } = await submitCase(
+        {
+          domain,
+          description,
+          evidenceRefs: evidenceRefs.filter((r) => r.trim().length > 0),
+          respondent,
+        },
+        provider
+      );
       router.push(`/case/${caseId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ruling failed. Try again.");
@@ -60,31 +86,56 @@ export default function SubmitCasePage() {
     }
   }
 
+  if (!isContractConfigured()) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-12">
+        <div className="card p-6 text-sm text-navy-600">
+          No contract is configured yet (NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS is unset). See the{" "}
+          <a href="/docs" className="font-medium text-navy-800 underline">
+            docs
+          </a>{" "}
+          for deployment instructions.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
       <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gold">New case</p>
       <h1 className="font-serif text-3xl font-semibold text-navy-900">Submit a Case</h1>
       <p className="mt-2 text-sm text-navy-500">
         Your case is ruled against the domain&apos;s existing precedent — the ruling will cite
-        and reason about similar past cases, not just answer this one in isolation.
+        and reason about similar past cases, not just answer this one in isolation. This calls
+        the live contract on GenLayer Asimov Testnet and may take a minute while validators reach
+        consensus.
       </p>
 
       <form onSubmit={handleSubmit} className="card mt-8 flex flex-col gap-6 p-6">
         <div>
           <label className="label" htmlFor="domain">Domain</label>
-          <select
-            id="domain"
-            className="input"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            disabled={submitting}
-          >
-            {DOMAINS.map((d) => (
-              <option key={d.tag} value={d.tag}>
-                {d.displayName}
-              </option>
-            ))}
-          </select>
+          {domainsLoading ? (
+            <p className="text-sm text-navy-400">Loading domains...</p>
+          ) : domains.length === 0 ? (
+            <p className="text-sm text-navy-400">
+              No domains registered yet. An integrator needs to call{" "}
+              <code className="rounded bg-navy-50 px-1">register_domain</code> first.
+            </p>
+          ) : (
+            <select
+              id="domain"
+              className="input"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              disabled={submitting}
+            >
+              {domains.map((d) => (
+                <option key={d.tag} value={d.tag}>
+                  {domainDisplayName(d.tag)}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>
@@ -149,8 +200,10 @@ export default function SubmitCasePage() {
         <div>
           <label className="label">Submitting Party</label>
           <div className="input flex items-center gap-2 bg-navy-50 text-navy-500">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            {MOCK_SUBMITTER} (connected wallet)
+            <span
+              className={`h-2 w-2 rounded-full ${isConnected ? "bg-emerald-500" : "bg-navy-300"}`}
+            />
+            {isConnected ? `${address} (connected wallet)` : "No wallet connected"}
           </div>
         </div>
 
@@ -161,8 +214,8 @@ export default function SubmitCasePage() {
             <ValidatorProgress activeStep={step} />
           </div>
         ) : (
-          <button type="submit" className="btn-primary w-full">
-            Submit for Ruling
+          <button type="submit" className="btn-primary w-full" disabled={!isConnected || domains.length === 0}>
+            {isConnected ? "Submit for Ruling" : "Connect a wallet to submit"}
           </button>
         )}
       </form>

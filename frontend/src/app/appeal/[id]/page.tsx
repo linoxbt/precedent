@@ -1,6 +1,12 @@
 import { notFound } from "next/navigation";
-import { getCase, getRuling } from "@/lib/genlayerClient";
-import { APPEALS, getDomain, outcomeLabel } from "@/lib/mockData";
+import {
+  domainDisplayName,
+  getAppeal,
+  getCase,
+  getDomain,
+  getRuling,
+  outcomeLabel,
+} from "@/lib/genlayerClient";
 import AppealPanel from "@/components/AppealPanel";
 
 export default async function AppealPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,13 +17,15 @@ export default async function AppealPage({ params }: { params: Promise<{ id: str
     notFound();
   }
 
-  const domain = getDomain(caseRecord.domain);
-  const existingAppeal = APPEALS[id];
+  const [domain, existingAppeal] = await Promise.all([
+    getDomain(caseRecord.domain),
+    getAppeal(id),
+  ]);
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
       <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gold">
-        {domain?.displayName ?? caseRecord.domain}
+        {domain ? domainDisplayName(domain.tag) : caseRecord.domain}
       </p>
       <h1 className="font-serif text-3xl font-semibold text-navy-900">Appeal — Case #{caseRecord.id}</h1>
 

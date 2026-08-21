@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { outcomeLabel } from "@/lib/mockData";
+import { outcomeLabel } from "@/lib/genlayerClient";
 import type { Precedent } from "@/lib/types";
 
 export default function ExplorerTable({ precedents }: { precedents: Precedent[] }) {

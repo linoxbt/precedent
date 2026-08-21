@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCase, getDomainPrecedents, getRuling } from "@/lib/genlayerClient";
-import { getDomain } from "@/lib/mockData";
+import {
+  domainDisplayName,
+  getCase,
+  getDomain,
+  getDomainPrecedents,
+  getRuling,
+} from "@/lib/genlayerClient";
 import VerdictCard from "@/components/VerdictCard";
 import RationaleWithCitations from "@/components/RationaleWithCitations";
 
@@ -30,7 +35,7 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-gold">
-            {domain?.displayName ?? caseRecord.domain}
+            {domain ? domainDisplayName(domain.tag) : caseRecord.domain}
           </p>
           <h1 className="font-serif text-2xl font-semibold text-navy-900">Case #{caseRecord.id}</h1>
         </div>

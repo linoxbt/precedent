@@ -1,29 +1,15 @@
 "use client";
 
-import { useState } from "react";
-
-const MOCK_ADDRESS = "0x2b6a...19fd";
+import { REOWN_PROJECT_ID } from "@/lib/wagmiConfig";
 
 export default function WalletConnectButton() {
-  const [connected, setConnected] = useState(false);
+  if (!REOWN_PROJECT_ID) {
+    return (
+      <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+        Wallet connect not configured
+      </span>
+    );
+  }
 
-  return (
-    <button
-      onClick={() => setConnected((c) => !c)}
-      className={
-        connected
-          ? "inline-flex items-center gap-2 rounded-lg border border-navy-200 bg-navy-50 px-4 py-2 text-sm font-medium text-navy-700"
-          : "btn-primary"
-      }
-    >
-      <span
-        className={
-          connected
-            ? "h-2 w-2 rounded-full bg-emerald-500"
-            : "h-2 w-2 rounded-full bg-parchment-100/60"
-        }
-      />
-      {connected ? MOCK_ADDRESS : "Connect Wallet"}
-    </button>
-  );
+  return <appkit-button balance="hide" />;
 }

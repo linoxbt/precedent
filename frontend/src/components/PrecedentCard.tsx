@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { outcomeLabel } from "@/lib/mockData";
+import { outcomeLabel } from "@/lib/genlayerClient";
 import type { Precedent } from "@/lib/types";
 
 export default function PrecedentCard({ precedent }: { precedent: Precedent }) {

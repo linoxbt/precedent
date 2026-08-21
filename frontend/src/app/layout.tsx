@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import TopNav from "@/components/TopNav";
 import Footer from "@/components/Footer";
+import AppKitProvider from "@/components/AppKitProvider";
 
 export const metadata: Metadata = {
   title: "Precedent Engine",
@@ -13,9 +14,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="flex min-h-screen flex-col">
-        <TopNav />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <AppKitProvider>
+          <TopNav />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </AppKitProvider>
       </body>
     </html>
   );

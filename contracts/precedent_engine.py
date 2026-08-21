@@ -1,49 +1,86 @@
-# { "Depends": "py-genlayer:<current-sdk-hash>" }
-#
-# Precedent Engine — GenLayer Intelligent Contract
-#
-# Trustless, precedent-consistent adjudication for the agentic economy.
-# Every ruling is graded against prior rulings in its domain (via the
-# Non-Comparative Equivalence Principle) and, once accepted, is written
-# back into the domain's precedent set so future cases can cite it.
-#
-# Reference: PrecedentEngineBuildSpec.pdf, sections 3, 4, 5.
-# Confirm exact vector-store method names against sdk.genlayer.com before
-# deploying — this contract falls back to an in-contract cosine-similarity
-# scan over stored embeddings if the native vector-store primitive isn't
-# available yet at build time (see Section 10 of the spec, "Risks").
+# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+
+"""
+Precedent Engine — GenLayer Intelligent Contract
+
+Trustless, precedent-consistent adjudication for the agentic economy.
+Every ruling is graded against prior rulings in its domain (via the
+Non-Comparative Equivalence Principle) and, once accepted, is written
+back into the domain's precedent set so future cases can cite it.
+
+Reference: PrecedentEngineBuildSpec.pdf, sections 3, 4, 5.
+Precedent retrieval uses a deterministic in-contract embedding rather than
+GenLayer's native vector-store primitive, whose exact API was still
+evolving as of this build (see Section 10 of the spec, "Risks", and the
+`_embed` docstring below for why).
+"""
 
 from genlayer import *
+from dataclasses import dataclass
+import hashlib
 import json
 import math
 
 APPEAL_BOND_WEI = 10 ** 16  # 0.01 native token; tune per deployment
 TOP_K_PRECEDENTS = 5
 MAX_EVIDENCE_CHARS = 2000
+EMBED_DIM = 64
+
+
+@allow_storage
+@dataclass
+class DomainConfig:
+    rubric: str
+    integrator: Address
+
+
+@allow_storage
+@dataclass
+class CaseRecord:
+    domain: str
+    description: str
+    evidence_refs: DynArray[str]
+    submitter: Address
+    respondent: str
+    status: str
+
+
+@allow_storage
+@dataclass
+class RulingRecord:
+    outcome: str
+    rationale: str
+    cited_precedent_ids: DynArray[str]
+    confidence: float
+    round: bigint
+
+
+@allow_storage
+@dataclass
+class AppealRecord:
+    appellant: Address
+    bond: u256
+    status: str
+    escalated_ruling: RulingRecord
+
+
+@allow_storage
+@dataclass
+class PrecedentEntry:
+    case_id: str
+    embedding: DynArray[float]
+    outcome_summary: str
 
 
 class PrecedentEngine(gl.Contract):
-    # tag -> {"rubric": str, "integrator": address}
-    domains: dict
-    # case_id -> {"domain", "description", "evidence_refs", "submitter",
-    #             "respondent", "status"}
-    cases: dict
-    # case_id -> {"outcome", "rationale", "cited_precedent_ids",
-    #             "confidence", "round"}
-    rulings: dict
-    # case_id -> {"appellant", "bond", "status", "escalated_ruling"}
-    appeals: dict
-    # domain -> list[{"case_id", "embedding", "outcome_summary"}]
-    # Fallback precedent index used only if the native vector-store
-    # primitive is unavailable (see module docstring).
-    precedent_index: dict
+    domains: TreeMap[str, DomainConfig]
+    cases: TreeMap[str, CaseRecord]
+    rulings: TreeMap[str, RulingRecord]
+    appeals: TreeMap[str, AppealRecord]
+    precedent_index: TreeMap[str, DynArray[PrecedentEntry]]
 
     def __init__(self):
-        self.domains = {}
-        self.cases = {}
-        self.rulings = {}
-        self.appeals = {}
-        self.precedent_index = {}
+        pass
 
     # ---------------------------------------------------------------
     # Domain registration (FR7)
@@ -53,11 +90,7 @@ class PrecedentEngine(gl.Contract):
     def register_domain(self, tag: str, rubric: str) -> None:
         if tag in self.domains:
             raise Exception(f"domain '{tag}' already registered")
-        self.domains[tag] = {
-            "rubric": rubric,
-            "integrator": gl.message.sender_address,
-        }
-        self.precedent_index[tag] = []
+        self.domains[tag] = DomainConfig(rubric=rubric, integrator=gl.message.sender_address)
 
     # ---------------------------------------------------------------
     # Case submission + first-instance ruling (FR1, FR2, FR3, FR4)
@@ -77,48 +110,59 @@ class PrecedentEngine(gl.Contract):
         if case_id in self.cases:
             raise Exception(f"case '{case_id}' already exists")
 
-        self.cases[case_id] = {
-            "domain": domain,
-            "description": description,
-            "evidence_refs": evidence_refs,
-            "submitter": gl.message.sender_address,
-            "respondent": respondent,
-            "status": "pending",
-        }
+        self.cases[case_id] = CaseRecord(
+            domain=domain,
+            description=description,
+            evidence_refs=evidence_refs,
+            submitter=gl.message.sender_address,
+            respondent=respondent,
+            status="pending",
+        )
 
-        rubric = self.domains[domain]["rubric"]
+        rubric = self.domains[domain].rubric
         precedents = self._retrieve_precedents(domain, description, TOP_K_PRECEDENTS)
 
-        def draft_ruling() -> str:
-            evidence_text = self._collect_evidence_text(evidence_refs)
-            prompt = f"""
-You are ruling on a case in domain '{domain}'. Adjudicate consistently
-with the RETRIEVED PRECEDENTS below unless the facts materially differ —
-if you depart from a precedent, say exactly why in the rationale.
-
-CASE: {description}
+        def case_input() -> str:
+            # `fn` passed to prompt_non_comparative must return the raw INPUT
+            # text for the LLM to act on — the LLM call itself happens inside
+            # prompt_non_comparative (via task= and criteria=), not here. See
+            # sdk.genlayer.com's eq_principles source: the leader/validator
+            # closures it builds internally call fn() for input only, then
+            # run their own ExecPromptTemplate call around it.
+            evidence_text = ""
+            for ref in evidence_refs:
+                if ref.startswith("http"):
+                    evidence_text += gl.get_webpage(ref, mode="text")[:MAX_EVIDENCE_CHARS]
+                else:
+                    evidence_text += f"[content-hash reference: {ref}] "
+            return f"""
+CASE (domain '{domain}'): {description}
 
 EVIDENCE: {evidence_text}
 
 RETRIEVED PRECEDENTS (most similar first): {json.dumps(precedents)}
-
-Return ONLY JSON with this exact shape:
-{{"outcome": "...", "rationale": "...", "cited_precedent_ids": [...], "confidence": 0.0}}
 """
-            result = gl.exec_prompt(prompt)
-            return json.dumps(json.loads(result), sort_keys=True)
 
         ruling_json = gl.eq_principle.prompt_non_comparative(
-            draft_ruling,
-            task="Produce a ruling that is well-reasoned and consistent with cited precedent, "
-            "or explicitly justifies departing from it.",
+            case_input,
+            task="Adjudicate this case consistently with the RETRIEVED PRECEDENTS in the input "
+            "unless the facts materially differ — if you depart from a precedent, say exactly "
+            "why in the rationale. Return ONLY JSON with this exact shape, no markdown fences "
+            'or extra text: {"outcome": "...", "rationale": "...", '
+            '"cited_precedent_ids": [...], "confidence": 0.0}',
             criteria=rubric,
         )
-        ruling = json.loads(ruling_json)
-        ruling["round"] = 0
+        ruling_data = json.loads(ruling_json.replace("```json", "").replace("```", "").strip())
+        ruling = RulingRecord(
+            outcome=ruling_data["outcome"],
+            rationale=ruling_data["rationale"],
+            cited_precedent_ids=ruling_data.get("cited_precedent_ids", []),
+            confidence=float(ruling_data.get("confidence", 0.0)),
+            round=0,
+        )
 
         self.rulings[case_id] = ruling
-        self.cases[case_id]["status"] = "ruled"
+        self.cases[case_id].status = "ruled"
         self._write_precedent(domain, case_id, description, ruling)
 
     # ---------------------------------------------------------------
@@ -129,27 +173,52 @@ Return ONLY JSON with this exact shape:
     def get_ruling(self, case_id: str) -> dict:
         if case_id not in self.rulings:
             raise Exception(f"no ruling for case '{case_id}'")
-        return self.rulings[case_id]
+        return self._ruling_to_dict(self.rulings[case_id])
 
     @gl.public.view
     def get_case(self, case_id: str) -> dict:
         if case_id not in self.cases:
             raise Exception(f"unknown case '{case_id}'")
-        return self.cases[case_id]
+        c = self.cases[case_id]
+        return {
+            "domain": c.domain,
+            "description": c.description,
+            "evidence_refs": list(c.evidence_refs),
+            "submitter": c.submitter.as_hex,
+            "respondent": c.respondent,
+            "status": c.status,
+        }
+
+    @gl.public.view
+    def list_domains(self) -> list:
+        return [
+            {"tag": tag, "rubric": cfg.rubric, "integrator": cfg.integrator.as_hex}
+            for tag, cfg in self.domains.items()
+        ]
 
     @gl.public.view
     def get_domain_precedents(self, domain: str, limit: int = 20) -> list:
-        if domain not in self.precedent_index:
+        if domain not in self.domains:
             raise Exception(f"unknown domain '{domain}'")
-        entries = self.precedent_index[domain][-limit:]
-        return [
-            {"case_id": e["case_id"], "outcome_summary": e["outcome_summary"]}
-            for e in entries
-        ]
+        entries = list(self.precedent_index[domain]) if domain in self.precedent_index else []
+        recent = entries[-limit:]
+        return [{"case_id": e.case_id, "outcome_summary": e.outcome_summary} for e in recent]
 
     # ---------------------------------------------------------------
     # Appeal flow (FR5, FR6)
     # ---------------------------------------------------------------
+
+    @gl.public.view
+    def get_appeal(self, case_id: str) -> dict:
+        if case_id not in self.appeals:
+            raise Exception(f"no appeal for case '{case_id}'")
+        a = self.appeals[case_id]
+        return {
+            "appellant": a.appellant.as_hex,
+            "bond": a.bond,
+            "status": a.status,
+            "escalated_ruling": self._ruling_to_dict(a.escalated_ruling),
+        }
 
     @gl.public.write.payable
     def appeal(self, case_id: str) -> None:
@@ -157,104 +226,134 @@ Return ONLY JSON with this exact shape:
             raise Exception(f"no ruling to appeal for case '{case_id}'")
         if gl.message.value < APPEAL_BOND_WEI:
             raise Exception(f"appeal bond must be >= {APPEAL_BOND_WEI}")
-        if case_id in self.appeals and self.appeals[case_id]["status"] == "pending":
+        if case_id in self.appeals and self.appeals[case_id].status == "pending":
             raise Exception("appeal already in progress for this case")
 
         case = self.cases[case_id]
-        domain = case["domain"]
-        rubric = self.domains[domain]["rubric"]
-        prior_round = self.rulings[case_id]["round"]
-        precedents = self._retrieve_precedents(domain, case["description"], TOP_K_PRECEDENTS)
+        domain = case.domain
+        rubric = self.domains[domain].rubric
+        prior_round = self.rulings[case_id].round
+        precedents = self._retrieve_precedents(domain, case.description, TOP_K_PRECEDENTS)
+        original_ruling_json = json.dumps(self._ruling_to_dict(self.rulings[case_id]))
+        evidence_refs = list(case.evidence_refs)
+        description = case.description
 
-        def re_rule() -> str:
-            evidence_text = self._collect_evidence_text(case["evidence_refs"])
-            prompt = f"""
-You are the APPEAL panel reviewing a prior ruling in domain '{domain}'.
-Independently re-adjudicate. Affirm the original ruling unless the
-precedent record or evidence clearly supports a different outcome.
-
-CASE: {case["description"]}
+        def appeal_input() -> str:
+            evidence_text = ""
+            for ref in evidence_refs:
+                if ref.startswith("http"):
+                    evidence_text += gl.get_webpage(ref, mode="text")[:MAX_EVIDENCE_CHARS]
+                else:
+                    evidence_text += f"[content-hash reference: {ref}] "
+            return f"""
+CASE (domain '{domain}'): {description}
 
 EVIDENCE: {evidence_text}
 
-ORIGINAL RULING: {json.dumps(self.rulings[case_id])}
+ORIGINAL RULING: {original_ruling_json}
 
 RETRIEVED PRECEDENTS: {json.dumps(precedents)}
-
-Return ONLY JSON with this exact shape:
-{{"outcome": "...", "rationale": "...", "cited_precedent_ids": [...], "confidence": 0.0, "affirmed": true}}
 """
-            result = gl.exec_prompt(prompt)
-            return json.dumps(json.loads(result), sort_keys=True)
 
         appeal_ruling_json = gl.eq_principle.prompt_non_comparative(
-            re_rule,
-            task="Independently re-adjudicate the case on appeal, affirming or overturning "
-            "the original ruling with clear reasoning grounded in precedent.",
+            appeal_input,
+            task="You are the APPEAL panel reviewing the ORIGINAL RULING in the input. "
+            "Independently re-adjudicate, affirming it unless the precedent record or evidence "
+            "clearly supports a different outcome. Return ONLY JSON with this exact shape, no "
+            'markdown fences or extra text: {"outcome": "...", "rationale": "...", '
+            '"cited_precedent_ids": [...], "confidence": 0.0, "affirmed": true}',
             criteria=rubric,
         )
-        appeal_ruling = json.loads(appeal_ruling_json)
-        appeal_ruling["round"] = prior_round + 1
+        appeal_data = json.loads(appeal_ruling_json.replace("```json", "").replace("```", "").strip())
+        appeal_ruling = RulingRecord(
+            outcome=appeal_data["outcome"],
+            rationale=appeal_data["rationale"],
+            cited_precedent_ids=appeal_data.get("cited_precedent_ids", []),
+            confidence=float(appeal_data.get("confidence", 0.0)),
+            round=prior_round + 1,
+        )
 
-        overturned = not appeal_ruling.get("affirmed", True)
+        overturned = not appeal_data.get("affirmed", True)
 
-        self.appeals[case_id] = {
-            "appellant": gl.message.sender_address,
-            "bond": gl.message.value,
-            "status": "overturned" if overturned else "affirmed",
-            "escalated_ruling": appeal_ruling,
-        }
+        self.appeals[case_id] = AppealRecord(
+            appellant=gl.message.sender_address,
+            bond=gl.message.value,
+            status="overturned" if overturned else "affirmed",
+            escalated_ruling=appeal_ruling,
+        )
 
         if overturned:
             self.rulings[case_id] = appeal_ruling
-            self._write_precedent(domain, case_id, case["description"], appeal_ruling)
+            self._write_precedent(domain, case_id, description, appeal_ruling)
 
-        self.cases[case_id]["status"] = "final"
+        self.cases[case_id].status = "final"
 
     # ---------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------
 
-    def _collect_evidence_text(self, evidence_refs: list[str]) -> str:
-        text = ""
-        for ref in evidence_refs:
-            if ref.startswith("http"):
-                text += gl.get_webpage(ref, mode="text")[:MAX_EVIDENCE_CHARS]
-            else:
-                text += f"[content-hash reference: {ref}] "
-        return text
+    @staticmethod
+    def _ruling_to_dict(r: RulingRecord) -> dict:
+        return {
+            "outcome": r.outcome,
+            "rationale": r.rationale,
+            "cited_precedent_ids": list(r.cited_precedent_ids),
+            # float isn't calldata-encodable in a view-method return value
+            # (only in storage), so it's serialized as a string here.
+            "confidence": str(r.confidence),
+            "round": r.round,
+        }
 
-    def _write_precedent(self, domain: str, case_id: str, description: str, ruling: dict) -> None:
-        summary = f"{ruling.get('outcome', '')}: {ruling.get('rationale', '')[:280]}"
-        self.precedent_index[domain].append({
-            "case_id": case_id,
-            "embedding": gl.vector_store.embed(f"{description}\n{summary}"),
-            "outcome_summary": summary,
-        })
+    def _write_precedent(self, domain: str, case_id: str, description: str, ruling: RulingRecord) -> None:
+        summary = f"{ruling.outcome}: {ruling.rationale[:280]}"
+        entry = PrecedentEntry(
+            case_id=case_id,
+            embedding=self._embed(f"{description}\n{summary}"),
+            outcome_summary=summary,
+        )
+        self.precedent_index.get_or_insert_default(domain).append(entry)
 
     def _retrieve_precedents(self, domain: str, description: str, k: int) -> list:
         """Nearest-neighbor precedent lookup, scoped strictly to `domain`.
 
-        Prefers the native GenLayer vector-store primitive; falls back to
-        an in-contract cosine-similarity scan over stored embeddings if
-        that primitive isn't available (see Section 10 of the spec).
+        Uses a deterministic in-contract embedding (see `_embed`) rather than
+        GenLayer's native vector-store primitive: that primitive's exact API
+        was still evolving as of this build (see Section 10 of the spec), and
+        every validator must derive bit-identical state from this write path,
+        which rules out anything nondeterministic (e.g. Python's randomized
+        string hashing, or an LLM-derived embedding outside an eq_principle
+        block).
         """
-        entries = self.precedent_index.get(domain, [])
+        if domain not in self.precedent_index:
+            return []
+        entries = list(self.precedent_index[domain])
         if not entries:
             return []
-        try:
-            return gl.vector_store.query(domain, description, top_k=k)
-        except AttributeError:
-            query_vec = gl.vector_store.embed(description)
-            scored = [
-                (self._cosine_similarity(query_vec, e["embedding"]), e)
-                for e in entries
-            ]
-            scored.sort(key=lambda pair: pair[0], reverse=True)
-            return [
-                {"case_id": e["case_id"], "outcome_summary": e["outcome_summary"]}
-                for _, e in scored[:k]
-            ]
+        query_vec = self._embed(description)
+        scored = [
+            (self._cosine_similarity(query_vec, list(e.embedding)), e)
+            for e in entries
+        ]
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        return [
+            {"case_id": e.case_id, "outcome_summary": e.outcome_summary}
+            for _, e in scored[:k]
+        ]
+
+    @staticmethod
+    def _embed(text: str, dim: int = EMBED_DIM) -> list:
+        """Deterministic bag-of-words hashing embedding (the 'hashing trick').
+
+        Uses sha256 rather than Python's built-in hash() because str hashing
+        is randomized per-process by default (PYTHONHASHSEED) and would make
+        every validator compute a different vector for the same text.
+        """
+        vec = [0.0] * dim
+        for word in text.lower().split():
+            digest = hashlib.sha256(word.encode("utf-8")).digest()
+            idx = int.from_bytes(digest[:4], "big") % dim
+            vec[idx] += 1.0
+        return vec
 
     @staticmethod
     def _cosine_similarity(a: list, b: list) -> float:

@@ -2,10 +2,8 @@ export type CaseStatus = "pending" | "ruled" | "appealed" | "final";
 
 export interface DomainConfig {
   tag: string;
-  displayName: string;
   rubric: string;
   integrator: string;
-  precedentTrend: number[]; // sparkline data, recent precedent counts over time
 }
 
 export interface Precedent {
@@ -45,7 +43,7 @@ export interface Appeal {
   appellant: string;
   bond: string; // formatted native token amount
   status: "pending" | "affirmed" | "overturned";
-  panelSizeBefore: number;
-  panelSizeAfter: number;
+  /** Validators that actually reviewed the escalated round, read from the transaction receipt. */
+  validatorCount?: number;
   escalatedRuling?: Ruling;
 }
