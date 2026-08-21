@@ -15,7 +15,7 @@ if (!PRECEDENT_ENGINE_ADDRESS) {
   // since this module is imported by both server and client components.
   // eslint-disable-next-line no-console
   console.warn(
-    "NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS is not set — the app cannot reach a live contract."
+    "NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS is not set: the app cannot reach a live contract."
   );
 }
 

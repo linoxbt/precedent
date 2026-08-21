@@ -1,7 +1,7 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 """
-Precedent Engine — GenLayer Intelligent Contract
+Precedent Engine: GenLayer Intelligent Contract
 
 Trustless, precedent-consistent adjudication for the agentic economy.
 Every ruling is graded against prior rulings in its domain (via the
@@ -124,7 +124,7 @@ class PrecedentEngine(gl.Contract):
 
         def case_input() -> str:
             # `fn` passed to prompt_non_comparative must return the raw INPUT
-            # text for the LLM to act on — the LLM call itself happens inside
+            # text for the LLM to act on; the LLM call itself happens inside
             # prompt_non_comparative (via task= and criteria=), not here. See
             # sdk.genlayer.com's eq_principles source: the leader/validator
             # closures it builds internally call fn() for input only, then
@@ -146,7 +146,7 @@ RETRIEVED PRECEDENTS (most similar first): {json.dumps(precedents)}
         ruling_json = gl.eq_principle.prompt_non_comparative(
             case_input,
             task="Adjudicate this case consistently with the RETRIEVED PRECEDENTS in the input "
-            "unless the facts materially differ — if you depart from a precedent, say exactly "
+            "unless the facts materially differ. If you depart from a precedent, say exactly "
             "why in the rationale. Return ONLY JSON with this exact shape, no markdown fences "
             'or extra text: {"outcome": "...", "rationale": "...", '
             '"cited_precedent_ids": [...], "confidence": 0.0}',

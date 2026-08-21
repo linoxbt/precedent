@@ -29,7 +29,7 @@ export default async function AppealPage({ params }: { params: Promise<{ id: str
         <div className="flex items-center gap-2 border-b border-chrome-border bg-chrome-titlebar px-4 py-2.5">
           <GavelIcon className="h-4 w-4 text-accent-500" />
           <span className="text-xs font-semibold text-ink">
-            Case #{caseRecord.id} Properties — Appeal
+            Case #{caseRecord.id} Properties: Appeal
           </span>
           <WindowDots className="ml-auto" />
         </div>

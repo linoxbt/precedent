@@ -25,28 +25,30 @@ function buildCrumbs(pathname: string): Crumb[] {
   const parts = pathname.split("/").filter(Boolean);
 
   if (parts.length === 0) return [{ label: "Precedent Engine" }];
-  if (parts[0] === "dashboard") return [{ label: "Precedent Engine", href: "/" }, { label: "This PC" }];
+  if (parts[0] === "dashboard") return [{ label: "Precedent Engine", href: "/" }, { label: "Case Files" }];
   if (parts[0] === "submit")
-    return [{ label: "Precedent Engine", href: "/" }, { label: "This PC", href: "/dashboard" }, { label: "New Case" }];
+    return [{ label: "Precedent Engine", href: "/" }, { label: "Case Files", href: "/dashboard" }, { label: "New Case" }];
   if (parts[0] === "docs") return [{ label: "Precedent Engine", href: "/" }, { label: "Help" }];
+  if (parts[0] === "recent") return [{ label: "Precedent Engine", href: "/" }, { label: "Recent Cases" }];
+  if (parts[0] === "about") return [{ label: "Precedent Engine", href: "/" }, { label: "About" }];
   if (parts[0] === "explorer" && parts[1]) {
     return [
       { label: "Precedent Engine", href: "/" },
-      { label: "This PC", href: "/dashboard" },
+      { label: "Case Files", href: "/dashboard" },
       { label: domainDisplayName(decodeURIComponent(parts[1])) },
     ];
   }
   if (parts[0] === "case" && parts[1]) {
     return [
       { label: "Precedent Engine", href: "/" },
-      { label: "This PC", href: "/dashboard" },
+      { label: "Case Files", href: "/dashboard" },
       { label: `Case #${decodeURIComponent(parts[1])}.ruling` },
     ];
   }
   if (parts[0] === "appeal" && parts[1]) {
     return [
       { label: "Precedent Engine", href: "/" },
-      { label: "This PC", href: "/dashboard" },
+      { label: "Case Files", href: "/dashboard" },
       { label: `Case #${decodeURIComponent(parts[1])}`, href: `/case/${parts[1]}` },
       { label: "Appeal" },
     ];

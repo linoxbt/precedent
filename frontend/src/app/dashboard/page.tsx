@@ -50,7 +50,7 @@ export default function DashboardPage() {
           <p className="px-2 text-sm text-red-600">{error}</p>
         ) : domains.length === 0 ? (
           <div className="panel p-6 text-sm text-ink-muted">
-            This PC is empty. No domains registered yet — call{" "}
+            No practice areas registered yet: call{" "}
             <code className="rounded bg-chrome px-1">register_domain</code> on the contract to create the
             first folder.
           </div>

@@ -19,7 +19,7 @@ export default function VerdictCard({
   return (
     <div className="panel border-l-4 border-l-accent-500 p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-        {round === 0 ? "First-Instance Ruling" : `Appeal Ruling — Round ${round}`}
+        {round === 0 ? "First-Instance Ruling" : `Appeal Ruling, Round ${round}`}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <h2 className="text-2xl font-semibold text-ink">{outcomeLabel(outcome)}</h2>

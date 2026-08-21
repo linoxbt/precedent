@@ -7,7 +7,7 @@ import NavigationPane from "@/components/NavigationPane";
 export const metadata: Metadata = {
   title: "Precedent Engine",
   description:
-    "A trustless, precedent-consistent adjudication protocol for the agentic economy — on-chain case law for AI judgment.",
+    "A trustless, precedent-consistent adjudication protocol for the agentic economy: on-chain case law for AI judgment.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
