@@ -10,7 +10,9 @@ import {
 import VerdictCard from "@/components/VerdictCard";
 import RationaleWithCitations from "@/components/RationaleWithCitations";
 import StatusBar from "@/components/StatusBar";
+import EscrowPanel from "@/components/EscrowPanel";
 import { DocumentIcon } from "@/components/icons";
+import { formatEther } from "viem";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -99,6 +101,18 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
               <dt className="text-ink-faint">Respondent</dt>
               <dd className="break-all font-mono text-ink-muted">{caseRecord.respondent || "None"}</dd>
             </div>
+            {BigInt(caseRecord.amount || "0") > 0n && (
+              <div>
+                <dt className="text-ink-faint">Disputed Amount</dt>
+                <dd className="font-mono text-ink-muted">{formatEther(BigInt(caseRecord.amount))} GEN</dd>
+              </div>
+            )}
+            <EscrowPanel
+              caseId={caseRecord.id}
+              escrowWei={caseRecord.escrow}
+              escrowWithdrawn={caseRecord.escrowWithdrawn}
+              submitter={caseRecord.submitter}
+            />
             <div>
               <dt className="text-ink-faint">Evidence ({caseRecord.evidenceRefs.length})</dt>
               <dd className="mt-1 flex flex-col gap-1">

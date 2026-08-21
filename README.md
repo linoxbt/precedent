@@ -39,12 +39,21 @@ frontend/
 
 ## Contract (`contracts/precedent_engine.py`)
 
-Implements `register_domain`, `submit_case`, `get_ruling`, `get_case`, `get_appeal`,
-`list_domains`, `get_domain_precedents`, and `appeal`:
+Implements `register_domain`, `submit_case`, `withdraw_escrow`, `get_ruling`, `get_case`,
+`get_appeal`, `list_domains`, `get_domain_precedents`, and `appeal`:
 
 - **`submit_case`** retrieves the domain's top-k nearest precedents, has the Leader draft a
   ruling via `gl.eq_principle.prompt_non_comparative`, and grades it against the domain's
-  rubric before accepting and embedding it as precedent.
+  rubric before accepting and embedding it as precedent. It's `payable` and takes an optional
+  `amount` (the disputed amount, in wei): when set, the caller must lock at least 50% of it as
+  escrow (the transaction value) or the call reverts.
+- **`withdraw_escrow`** refunds a case's locked escrow to its submitter once the case has a
+  ruling. The one exception: if the submitter appealed their own case and the escalated panel
+  affirmed the original ruling, the escrow is forfeited rather than refunded, on top of the
+  appeal bond they already posted. Sending the refund to a plain wallet address (not another
+  Intelligent Contract) is routed through an `@gl.evm.contract_interface` ghost-contract proxy's
+  `emit_transfer`, per genlayer-studio's `faucet.py` example; a contract can't `emit_transfer`
+  straight to an EOA otherwise.
 - **`appeal`** is `payable`; it requires a bond, re-adjudicates via the same non-comparative
   EP call, and if overturned, the new ruling replaces the original as controlling precedent.
   GenLayer's native appeal ladder supplies the larger validator panel automatically.

@@ -104,6 +104,9 @@ export async function getCase(caseId: string): Promise<Case | undefined> {
       submitter: string;
       respondent: string;
       status: Case["status"];
+      amount: number | string;
+      escrow: number | string;
+      escrow_withdrawn: boolean;
     };
     return {
       id: caseId,
@@ -114,6 +117,9 @@ export async function getCase(caseId: string): Promise<Case | undefined> {
       respondent: c.respondent,
       status: c.status,
       createdAt: "",
+      amount: `${c.amount}`,
+      escrow: `${c.escrow}`,
+      escrowWithdrawn: c.escrow_withdrawn,
     };
   } catch {
     return undefined;
@@ -216,6 +222,10 @@ export interface SubmitCaseInput {
   description: string;
   evidenceRefs: string[];
   respondent?: string;
+  /** Disputed amount, in wei. Omit or 0 for cases with no monetary claim (no escrow required). */
+  amountWei?: bigint;
+  /** GEN actually locked as escrow (sent as the transaction value). Must be >= 50% of amountWei if amountWei > 0. */
+  escrowWei?: bigint;
 }
 
 export async function submitCase(
@@ -226,12 +236,21 @@ export async function submitCase(
   const address = requireAddress();
   const client = writeClientFor(provider, account);
   const caseId = crypto.randomUUID();
+  const amountWei = input.amountWei ?? 0n;
+  const escrowWei = input.escrowWei ?? 0n;
 
   const hash = await client.writeContract({
     address,
     functionName: "submit_case",
-    args: [caseId, input.domain, input.description, input.evidenceRefs, input.respondent ?? ""],
-    value: 0n,
+    args: [
+      caseId,
+      input.domain,
+      input.description,
+      input.evidenceRefs,
+      input.respondent ?? "",
+      amountWei,
+    ],
+    value: escrowWei,
   });
 
   const receipt = await client.waitForTransactionReceipt({ hash });
@@ -284,6 +303,22 @@ export async function registerDomain(
     address,
     functionName: "register_domain",
     args: [tag, rubric],
+    value: 0n,
+  });
+  await client.waitForTransactionReceipt({ hash });
+}
+
+export async function withdrawEscrow(
+  caseId: string,
+  provider: EIP1193Provider,
+  account: Address
+): Promise<void> {
+  const address = requireAddress();
+  const client = writeClientFor(provider, account);
+  const hash = await client.writeContract({
+    address,
+    functionName: "withdraw_escrow",
+    args: [caseId],
     value: 0n,
   });
   await client.waitForTransactionReceipt({ hash });

@@ -66,12 +66,12 @@ export default function WindowChrome({ children }: { children: React.ReactNode }
     <div className="flex min-h-screen flex-col">
       <div className="flex items-center gap-3 border-b border-chrome-border bg-chrome-titlebar px-4 py-2">
         <WindowDots />
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80">
           <span className="h-4 w-4">
             <AppIconMark />
           </span>
           <span className="text-xs font-semibold text-ink-muted">Precedent Engine</span>
-        </div>
+        </Link>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-chrome-border bg-chrome-toolbar px-3 py-2">
