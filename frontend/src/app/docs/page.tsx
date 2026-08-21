@@ -19,14 +19,9 @@ const METHODS = [
     body: "Registers a new case domain and its grading rubric. The rubric is the criteria text used when validators grade a ruling under the Non-Comparative Equivalence Principle.",
   },
   {
-    sig: "submit_case(case_id: str, domain: str, description: str, evidence_refs: list[str], respondent: str = \"\", amount: int = 0) -> None",
-    kind: "write, payable",
-    body: "Opens a case. Retrieves the domain's nearest precedents, has the Leader draft a ruling grounded in them, and grades the ruling under the Non-Comparative Equivalence Principle before accepting and embedding it as precedent. If amount (the disputed amount, in wei) is set, at least 50% of it must be sent as the transaction value, locked as escrow.",
-  },
-  {
-    sig: "withdraw_escrow(case_id: str) -> None",
+    sig: "submit_case(case_id: str, domain: str, description: str, evidence_refs: list[str], respondent: str = \"\") -> None",
     kind: "write",
-    body: "Refunds a case's locked escrow to its submitter once the case has been ruled on. Exception: if the submitter appealed and the escalated panel affirmed the original ruling, the escrow is forfeited instead of refunded.",
+    body: "Opens a case. Retrieves the domain's nearest precedents, has the Leader draft a ruling grounded in them, and grades the ruling under the Non-Comparative Equivalence Principle before accepting and embedding it as precedent.",
   },
   {
     sig: "appeal(case_id: str) -> None",
@@ -41,7 +36,7 @@ const METHODS = [
   {
     sig: "get_case(case_id: str) -> dict",
     kind: "view",
-    body: "Returns the case's domain, description, evidence references, submitter, respondent, status, disputed amount, locked escrow, and whether that escrow has been withdrawn.",
+    body: "Returns the case's domain, description, evidence references, submitter, respondent, and status.",
   },
   {
     sig: "get_appeal(case_id: str) -> dict",

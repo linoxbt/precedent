@@ -8,8 +8,7 @@ consensus. Built from `PrecedentEngineBuildSpec.pdf` (GenLayer Hackathon technic
 is live on multiple GenLayer networks, the frontend talks to it directly through `genlayer-js`,
 and wallet connection is handled by Reown AppKit. There is no mock-data fallback anywhere in
 the app: every page reads live contract state, and every write (`submit_case`, `appeal`,
-`register_domain`, `withdraw_escrow`) is a real signed transaction that runs an LLM-backed
-validator round.
+`register_domain`) is a real signed transaction that runs an LLM-backed validator round.
 
 The title bar's network switcher lets you pick which GenLayer network the app reads and
 writes against:
@@ -53,21 +52,12 @@ frontend/
 
 ## Contract (`contracts/precedent_engine.py`)
 
-Implements `register_domain`, `submit_case`, `withdraw_escrow`, `get_ruling`, `get_case`,
+Implements `register_domain`, `submit_case`, `get_ruling`, `get_case`,
 `get_appeal`, `list_domains`, `get_domain_precedents`, and `appeal`:
 
 - **`submit_case`** retrieves the domain's top-k nearest precedents, has the Leader draft a
   ruling via `gl.eq_principle.prompt_non_comparative`, and grades it against the domain's
-  rubric before accepting and embedding it as precedent. It's `payable` and takes an optional
-  `amount` (the disputed amount, in wei): when set, the caller must lock at least 50% of it as
-  escrow (the transaction value) or the call reverts.
-- **`withdraw_escrow`** refunds a case's locked escrow to its submitter once the case has a
-  ruling. The one exception: if the submitter appealed their own case and the escalated panel
-  affirmed the original ruling, the escrow is forfeited rather than refunded, on top of the
-  appeal bond they already posted. Sending the refund to a plain wallet address (not another
-  Intelligent Contract) is routed through an `@gl.evm.contract_interface` ghost-contract proxy's
-  `emit_transfer`, per genlayer-studio's `faucet.py` example; a contract can't `emit_transfer`
-  straight to an EOA otherwise.
+  rubric before accepting and embedding it as precedent.
 - **`appeal`** is `payable`; it requires a bond, re-adjudicates via the same non-comparative
   EP call, and if overturned, the new ruling replaces the original as controlling precedent.
   GenLayer's native appeal ladder supplies the larger validator panel automatically.
@@ -116,6 +106,18 @@ whoever deploys next:
    the transaction fee deposit, not the payable call's value, so a CLI-only appeal test always
    fails with "appeal bond must be >= ...". `genlayer-js`'s `writeContract({ value })` (what
    the actual frontend uses) does support it correctly.
+6. **The pinned GenVM runner has a storage-encoder bug that breaks contracts with more than
+   five top-level `TreeMap` fields once a `bigint`-bearing `@allow_storage @dataclass` is added
+   to the mix.** An escrow feature (lock/refund of a disputed amount on `submit_case`) was
+   built, deployed, and hit `AttributeError: 'int' object has no attribute 'encode'` deep in
+   the runner's `storage/_internal/desc_base_types.py` on the very first write, regardless of
+   whether the new field used `u256`, `bigint`, or an explicit `bigint()` cast. Bisected across
+   twelve isolated diagnostic contracts: not a field-count or dataclass-shape rule in general
+   (a 5-`TreeMap` contract with a differently-shaped dataclass also failed), but tied to
+   deviating at all from this contract's original, proven-working 5-`TreeMap` schema once a
+   `bigint` is involved. No workaround found from contract code; the escrow feature was
+   reverted rather than ship a `payable` method with no reliable way to persist the locked
+   value, which risked stranding user funds permanently.
 
 ## Frontend (`frontend/`)
 

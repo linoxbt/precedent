@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import { formatEther, parseEther } from "viem";
 import { listDomains, submitCase, domainDisplayName } from "@/lib/genlayerClient";
 import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
 import { isContractConfigured, GENLAYER_NETWORKS } from "@/lib/genlayerConfig";
@@ -22,8 +21,6 @@ export default function SubmitCasePage() {
   const [domain, setDomain] = useState("");
   const [description, setDescription] = useState("");
   const [respondent, setRespondent] = useState("");
-  const [disputedAmount, setDisputedAmount] = useState("");
-  const [escrowAmount, setEscrowAmount] = useState("");
   const [evidenceRefs, setEvidenceRefs] = useState<string[]>([""]);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(0);
@@ -56,12 +53,6 @@ export default function SubmitCasePage() {
     setEvidenceRefs((refs) => refs.filter((_, idx) => idx !== i));
   }
 
-  function handleDisputedAmountChange(value: string) {
-    setDisputedAmount(value);
-    const n = parseFloat(value);
-    setEscrowAmount(Number.isFinite(n) && n > 0 ? String(n / 2) : "");
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!description.trim()) {
@@ -70,15 +61,6 @@ export default function SubmitCasePage() {
     }
     if (!isConnected) {
       setError("Connect a wallet before submitting a case.");
-      return;
-    }
-
-    const amountWei = disputedAmount.trim() ? parseEther(disputedAmount) : 0n;
-    const escrowWei = escrowAmount.trim() ? parseEther(escrowAmount) : 0n;
-    if (amountWei > 0n && escrowWei < amountWei / 2n) {
-      setError(
-        `Escrow must be at least ${formatEther(amountWei / 2n)} GEN, 50% of the disputed amount.`
-      );
       return;
     }
 
@@ -99,8 +81,6 @@ export default function SubmitCasePage() {
           description,
           evidenceRefs: evidenceRefs.filter((r) => r.trim().length > 0),
           respondent,
-          amountWei,
-          escrowWei,
         },
         provider,
         account
@@ -179,38 +159,6 @@ export default function SubmitCasePage() {
               onChange={(e) => setDescription(e.target.value)}
               disabled={submitting}
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label" htmlFor="amount">Disputed Amount (GEN, optional)</label>
-              <input
-                id="amount"
-                type="number"
-                min="0"
-                step="0.0001"
-                className="input"
-                placeholder="0.0"
-                value={disputedAmount}
-                onChange={(e) => handleDisputedAmountChange(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="escrow">Escrow to Lock (GEN)</label>
-              <input
-                id="escrow"
-                type="number"
-                min="0"
-                step="0.0001"
-                className="input"
-                placeholder="0.0"
-                value={escrowAmount}
-                onChange={(e) => setEscrowAmount(e.target.value)}
-                disabled={submitting || !disputedAmount.trim()}
-              />
-              <p className="mt-1 text-[11px] text-ink-faint">Minimum 50% of the disputed amount.</p>
-            </div>
           </div>
 
           <div>
