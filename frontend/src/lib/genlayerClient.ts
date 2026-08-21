@@ -1,17 +1,17 @@
 import { createClient } from "genlayer-js";
 import type { Address } from "genlayer-js/types";
 import { GENLAYER_NETWORKS, isContractConfigured, type GenLayerNetworkKey } from "./genlayerConfig";
-import type { Appeal, Case, DomainConfig, Precedent, Ruling } from "./types";
+import type { Appeal, Case, CaseMessage, DomainConfig, Precedent, Ruling } from "./types";
 
 /**
  * GenLayerJS wiring for the Precedent Engine Intelligent Contract.
  *
  * Every export takes an explicit `network` (asimov / bradbury / studio):
  * reads go through a shared read-only client per network, and writes
- * (submit_case, appeal, withdraw_escrow, register_domain) are signed by
- * the connected wallet against whichever network is active. There is no
- * mock-data fallback: if a network's contract address isn't configured,
- * calls throw explicitly rather than silently returning fake data.
+ * (submit_case, appeal, register_domain) are signed by the connected
+ * wallet against whichever network is active. There is no mock-data
+ * fallback: if a network's contract address isn't configured, calls
+ * throw explicitly rather than silently returning fake data.
  */
 
 type EIP1193Provider = {
@@ -57,6 +57,30 @@ function extractValidatorCount(receipt: unknown): number | undefined {
   return Array.isArray(lastRound?.roundValidators) ? lastRound.roundValidators.length : undefined;
 }
 
+function receiptFailed(receipt: unknown): boolean {
+  const r = receipt as { txExecutionResultName?: string } | undefined;
+  return r?.txExecutionResultName === "FINISHED_WITH_ERROR";
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Reads can lag a few seconds behind a just-finalized write (observed directly on
+ * Studio Network: a freshly deployed contract 404s on read for a while after its
+ * deploy tx is FINALIZED on-chain). Retry with backoff instead of failing on the
+ * first miss.
+ */
+async function retryRead<T>(fn: () => Promise<T | undefined>, attempts = 6): Promise<T | undefined> {
+  for (let i = 0; i < attempts; i++) {
+    const result = await fn();
+    if (result !== undefined) return result;
+    if (i < attempts - 1) await sleep(1500 * (i + 1));
+  }
+  return undefined;
+}
+
 export async function listDomains(network: GenLayerNetworkKey): Promise<DomainConfig[]> {
   const address = requireAddress(network);
   const result = (await readClientFor(network).readContract({
@@ -92,6 +116,22 @@ export async function getDomainPrecedentSummaries(
   return result.map((r) => ({ caseId: r.case_id, outcomeSummary: r.outcome_summary }));
 }
 
+/**
+ * A case title has no dedicated contract field (adding one would mean another
+ * schema change to precedent_engine.py, and thus another redeploy - avoided
+ * here on purpose). Instead the title is the first line of the on-chain
+ * description, separated from the body by a blank line.
+ */
+export function encodeCaseText(title: string, description: string): string {
+  return `${title.trim()}\n\n${description.trim()}`;
+}
+
+function decodeCaseText(raw: string): { title: string; description: string } {
+  const separatorIndex = raw.indexOf("\n\n");
+  if (separatorIndex === -1) return { title: "", description: raw };
+  return { title: raw.slice(0, separatorIndex), description: raw.slice(separatorIndex + 2) };
+}
+
 export async function getCase(network: GenLayerNetworkKey, caseId: string): Promise<Case | undefined> {
   const address = requireAddress(network);
   try {
@@ -106,22 +146,20 @@ export async function getCase(network: GenLayerNetworkKey, caseId: string): Prom
       submitter: string;
       respondent: string;
       status: Case["status"];
-      amount: number | string;
-      escrow: number | string;
-      escrow_withdrawn: boolean;
+      message_count: number;
     };
+    const { title, description } = decodeCaseText(c.description);
     return {
       id: caseId,
       domain: c.domain,
-      description: c.description,
+      title,
+      description,
       evidenceRefs: c.evidence_refs,
       submitter: c.submitter,
       respondent: c.respondent,
       status: c.status,
       createdAt: "",
-      amount: `${c.amount}`,
-      escrow: `${c.escrow}`,
-      escrowWithdrawn: c.escrow_withdrawn,
+      messageCount: c.message_count,
     };
   } catch {
     return undefined;
@@ -221,13 +259,10 @@ export async function getAppeal(network: GenLayerNetworkKey, caseId: string): Pr
 
 export interface SubmitCaseInput {
   domain: string;
+  title: string;
   description: string;
   evidenceRefs: string[];
   respondent?: string;
-  /** Disputed amount, in wei. Omit or 0 for cases with no monetary claim (no escrow required). */
-  amountWei?: bigint;
-  /** GEN actually locked as escrow (sent as the transaction value). Must be >= 50% of amountWei if amountWei > 0. */
-  escrowWei?: bigint;
 }
 
 export async function submitCase(
@@ -239,8 +274,6 @@ export async function submitCase(
   const address = requireAddress(network);
   const client = writeClientFor(network, provider, account);
   const caseId = crypto.randomUUID();
-  const amountWei = input.amountWei ?? 0n;
-  const escrowWei = input.escrowWei ?? 0n;
 
   const hash = await client.writeContract({
     address,
@@ -248,18 +281,28 @@ export async function submitCase(
     args: [
       caseId,
       input.domain,
-      input.description,
+      encodeCaseText(input.title, input.description),
       input.evidenceRefs,
       input.respondent ?? "",
-      amountWei,
     ],
-    value: escrowWei,
+    value: 0n,
   });
 
-  const receipt = await client.waitForTransactionReceipt({ hash });
-  const ruling = await getRuling(network, caseId);
+  // submit_case drafts and grades a ruling via an LLM eq_principle round across
+  // every validator; that can comfortably take over the default 30s
+  // (waitInterval 3000 * retries 10) genlayer-js waits by default, so this was
+  // throwing "did not finalize" on writes that were still genuinely in flight.
+  const receipt = await client.waitForTransactionReceipt({ hash, interval: 3000, retries: 60 });
+  if (receiptFailed(receipt)) {
+    throw new Error(
+      `submit_case failed on-chain (tx ${hash}). Check the transaction on the explorer for details.`
+    );
+  }
+  const ruling = await retryRead(() => getRuling(network, caseId));
   if (!ruling) {
-    throw new Error("Ruling did not finalize, check the transaction on the explorer.");
+    throw new Error(
+      `Case was submitted (tx ${hash}) but the ruling hasn't shown up in reads yet. Check the transaction on the explorer, then refresh this page in a moment.`
+    );
   }
 
   return { caseId, ruling, validatorCount: extractValidatorCount(receipt) };
@@ -286,10 +329,18 @@ export async function appealRuling(
     value: input.bondWei,
   });
 
-  const receipt = await client.waitForTransactionReceipt({ hash });
-  const appeal = await getAppeal(network, input.caseId);
+  // Same LLM-backed-write timing note as submit_case above.
+  const receipt = await client.waitForTransactionReceipt({ hash, interval: 3000, retries: 60 });
+  if (receiptFailed(receipt)) {
+    throw new Error(
+      `appeal failed on-chain (tx ${hash}). Check the transaction on the explorer for details.`
+    );
+  }
+  const appeal = await retryRead(() => getAppeal(network, input.caseId));
   if (!appeal) {
-    throw new Error("Appeal did not finalize, check the transaction on the explorer.");
+    throw new Error(
+      `Appeal was submitted (tx ${hash}) but hasn't shown up in reads yet. Check the transaction on the explorer, then refresh this page in a moment.`
+    );
   }
 
   return { ...appeal, validatorCount: extractValidatorCount(receipt) };
@@ -313,9 +364,21 @@ export async function registerDomain(
   await client.waitForTransactionReceipt({ hash });
 }
 
-export async function withdrawEscrow(
+/** Case-scoped chat between the submitter and respondent. Contract enforces that only those two may post. */
+export async function getCaseMessages(network: GenLayerNetworkKey, caseId: string): Promise<CaseMessage[]> {
+  const address = requireAddress(network);
+  const result = (await readClientFor(network).readContract({
+    address,
+    functionName: "get_case_messages",
+    args: [caseId],
+  })) as { sender: string; text: string }[];
+  return result.map((m) => ({ sender: m.sender, text: m.text }));
+}
+
+export async function sendCaseMessage(
   network: GenLayerNetworkKey,
   caseId: string,
+  text: string,
   provider: EIP1193Provider,
   account: Address
 ): Promise<void> {
@@ -323,8 +386,8 @@ export async function withdrawEscrow(
   const client = writeClientFor(network, provider, account);
   const hash = await client.writeContract({
     address,
-    functionName: "withdraw_escrow",
-    args: [caseId],
+    functionName: "send_case_message",
+    args: [caseId, text],
     value: 0n,
   });
   await client.waitForTransactionReceipt({ hash });

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { domainDisplayName } from "@/lib/genlayerClient";
+import { useNavPane } from "@/lib/NavPaneProvider";
 import WalletConnectButton from "./WalletConnectButton";
 import NetworkSwitcher from "./NetworkSwitcher";
 import {
@@ -11,6 +12,7 @@ import {
   BackIcon,
   ChevronRightIcon,
   ForwardIcon,
+  MenuIcon,
   RefreshIcon,
   ThisPcIcon,
   UpIcon,
@@ -32,6 +34,8 @@ function buildCrumbs(pathname: string): Crumb[] {
   if (parts[0] === "docs") return [{ label: "Precedent Engine", href: "/" }, { label: "Help" }];
   if (parts[0] === "recent") return [{ label: "Precedent Engine", href: "/" }, { label: "Recent Cases" }];
   if (parts[0] === "about") return [{ label: "Precedent Engine", href: "/" }, { label: "About" }];
+  if (parts[0] === "profile") return [{ label: "Precedent Engine", href: "/" }, { label: "User Profile" }];
+  if (parts[0] === "history") return [{ label: "Precedent Engine", href: "/" }, { label: "History" }];
   if (parts[0] === "explorer" && parts[1]) {
     return [
       { label: "Precedent Engine", href: "/" },
@@ -62,10 +66,19 @@ export default function WindowChrome({ children }: { children: React.ReactNode }
   const router = useRouter();
   const crumbs = useMemo(() => buildCrumbs(pathname), [pathname]);
   const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2] : undefined;
+  const { toggleMobile } = useNavPane();
 
   return (
     <div className="flex min-h-screen flex-col">
       <div className="flex items-center gap-3 border-b border-chrome-border bg-chrome-titlebar px-4 py-2">
+        <button
+          type="button"
+          onClick={toggleMobile}
+          aria-label="Toggle navigation"
+          className="toolbar-btn !px-1.5 sm:hidden"
+        >
+          <MenuIcon />
+        </button>
         <WindowDots />
         <Link href="/" className="flex items-center gap-2 hover:opacity-80">
           <span className="h-4 w-4">
@@ -141,7 +154,7 @@ export default function WindowChrome({ children }: { children: React.ReactNode }
         </div>
       </div>
 
-      <div className="flex flex-1">{children}</div>
+      <div className="flex flex-1 flex-col sm:flex-row">{children}</div>
     </div>
   );
 }

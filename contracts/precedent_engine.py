@@ -24,26 +24,8 @@ import math
 APPEAL_BOND_WEI = 10 ** 16  # 0.01 native token; tune per deployment
 TOP_K_PRECEDENTS = 5
 MAX_EVIDENCE_CHARS = 2000
+MAX_MESSAGE_CHARS = 2000
 EMBED_DIM = 64
-MIN_ESCROW_BPS = 5000  # 50%, in basis points, of the declared disputed amount
-
-
-@gl.evm.contract_interface
-class _EscrowRecipient:
-    """Ghost-contract proxy used only to route emit_transfer to a plain EOA.
-
-    A contract can't send its own native-token balance to an arbitrary
-    wallet address directly; emit_transfer has to be issued through an
-    EVM contract-interface proxy for the recipient (see genlayer-studio's
-    faucet.py example), even when that recipient is an EOA and not
-    another Intelligent Contract.
-    """
-
-    class View:
-        pass
-
-    class Write:
-        pass
 
 
 @allow_storage
@@ -62,9 +44,12 @@ class CaseRecord:
     submitter: Address
     respondent: str
     status: str
-    amount: u256
-    escrow: u256
-    escrow_withdrawn: bool
+    # JSON-encoded {"sender": "0x...", "text": "..."} strings, oldest first.
+    # Kept as plain str (not a new dataclass/TreeMap) deliberately: see the
+    # "Non-obvious things learned" note in README.md on the GenVM storage bug
+    # that broke the escrow feature when new bigint-bearing storage shapes
+    # were added.
+    messages: DynArray[str]
 
 
 @allow_storage
@@ -118,7 +103,7 @@ class PrecedentEngine(gl.Contract):
     # Case submission + first-instance ruling (FR1, FR2, FR3, FR4)
     # ---------------------------------------------------------------
 
-    @gl.public.write.payable
+    @gl.public.write
     def submit_case(
         self,
         case_id: str,
@@ -126,21 +111,11 @@ class PrecedentEngine(gl.Contract):
         description: str,
         evidence_refs: list[str],
         respondent: str = "",
-        amount: int = 0,
     ) -> None:
         if domain not in self.domains:
             raise Exception(f"unknown domain '{domain}'")
         if case_id in self.cases:
             raise Exception(f"case '{case_id}' already exists")
-
-        escrow = gl.message.value
-        if amount > 0:
-            min_escrow = (amount * MIN_ESCROW_BPS) // 10000
-            if escrow < min_escrow:
-                raise Exception(
-                    f"must lock at least 50% of the disputed amount as escrow: "
-                    f"minimum {min_escrow} wei, got {escrow} wei"
-                )
 
         self.cases[case_id] = CaseRecord(
             domain=domain,
@@ -149,9 +124,7 @@ class PrecedentEngine(gl.Contract):
             submitter=gl.message.sender_address,
             respondent=respondent,
             status="pending",
-            amount=amount,
-            escrow=escrow,
-            escrow_withdrawn=False,
+            messages=[],
         )
 
         rubric = self.domains[domain].rubric
@@ -222,9 +195,7 @@ RETRIEVED PRECEDENTS (most similar first): {json.dumps(precedents)}
             "submitter": c.submitter.as_hex,
             "respondent": c.respondent,
             "status": c.status,
-            "amount": c.amount,
-            "escrow": c.escrow,
-            "escrow_withdrawn": c.escrow_withdrawn,
+            "message_count": len(c.messages),
         }
 
     @gl.public.view
@@ -327,43 +298,33 @@ RETRIEVED PRECEDENTS: {json.dumps(precedents)}
         self.cases[case_id].status = "final"
 
     # ---------------------------------------------------------------
-    # Escrow withdrawal
+    # Case messaging (submitter <-> respondent)
     # ---------------------------------------------------------------
 
     @gl.public.write
-    def withdraw_escrow(self, case_id: str) -> None:
-        """Refunds a case's locked escrow to its submitter.
-
-        Always refundable once the case has a ruling, with one exception:
-        if the submitter themself appealed and the escalated panel
-        affirmed the original ruling (the submitter lost their own
-        appeal), the escrow is forfeited instead, on top of the appeal
-        bond they already posted.
-        """
+    def send_case_message(self, case_id: str, text: str) -> None:
         if case_id not in self.cases:
             raise Exception(f"unknown case '{case_id}'")
+        text = text.strip()
+        if not text:
+            raise Exception("message text is required")
+        if len(text) > MAX_MESSAGE_CHARS:
+            raise Exception(f"message too long, max {MAX_MESSAGE_CHARS} characters")
+
         case = self.cases[case_id]
-        if case.escrow == 0:
-            raise Exception("no escrow locked for this case")
-        if case.escrow_withdrawn:
-            raise Exception("escrow already withdrawn for this case")
-        if gl.message.sender_address.as_hex.lower() != case.submitter.as_hex.lower():
-            raise Exception("only the case submitter can withdraw its escrow")
-        if case.status == "pending":
-            raise Exception("case has not been ruled on yet")
+        sender_hex = gl.message.sender_address.as_hex.lower()
+        is_submitter = sender_hex == case.submitter.as_hex.lower()
+        is_respondent = bool(case.respondent) and sender_hex == case.respondent.lower()
+        if not (is_submitter or is_respondent):
+            raise Exception("only the case's submitter or respondent can send messages")
 
-        if case_id in self.appeals:
-            appeal = self.appeals[case_id]
-            appellant_is_submitter = (
-                appeal.appellant.as_hex.lower() == case.submitter.as_hex.lower()
-            )
-            if appellant_is_submitter and appeal.status == "affirmed":
-                raise Exception(
-                    "escrow forfeited: your own appeal was affirmed against you"
-                )
+        case.messages.append(json.dumps({"sender": sender_hex, "text": text}))
 
-        case.escrow_withdrawn = True
-        _EscrowRecipient(case.submitter).emit_transfer(value=case.escrow)
+    @gl.public.view
+    def get_case_messages(self, case_id: str) -> list:
+        if case_id not in self.cases:
+            raise Exception(f"unknown case '{case_id}'")
+        return [json.loads(m) for m in self.cases[case_id].messages]
 
     # ---------------------------------------------------------------
     # Internal helpers

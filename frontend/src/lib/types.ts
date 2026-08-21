@@ -21,17 +21,20 @@ export interface Precedent {
 export interface Case {
   id: string;
   domain: string;
+  /** Short case title. Client-side convention: the first line of the on-chain description. */
+  title: string;
   description: string;
   evidenceRefs: string[];
   submitter: string;
   respondent: string;
   status: CaseStatus;
   createdAt: string;
-  /** Disputed amount declared by the submitter, in wei (as a decimal string). "0" if not specified. */
-  amount: string;
-  /** Escrow actually locked at submission, in wei (as a decimal string). "0" if none. */
-  escrow: string;
-  escrowWithdrawn: boolean;
+  messageCount: number;
+}
+
+export interface CaseMessage {
+  sender: string;
+  text: string;
 }
 
 export interface Ruling {

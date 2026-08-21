@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import { formatEther, parseEther } from "viem";
-import { listDomains, submitCase, domainDisplayName } from "@/lib/genlayerClient";
+import { listDomains, submitCase, registerDomain, domainDisplayName } from "@/lib/genlayerClient";
 import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
 import { isContractConfigured, GENLAYER_NETWORKS } from "@/lib/genlayerConfig";
 import { useActiveNetwork } from "@/lib/NetworkProvider";
 import ValidatorProgress from "@/components/ValidatorProgress";
 import { NewFileIcon, WindowDots } from "@/components/icons";
 import type { DomainConfig } from "@/lib/types";
+
+const NEW_FOLDER_VALUE = "__new_folder__";
 
 export default function SubmitCasePage() {
   const router = useRouter();
@@ -20,16 +21,21 @@ export default function SubmitCasePage() {
   const [domains, setDomains] = useState<DomainConfig[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(true);
   const [domain, setDomain] = useState("");
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [respondent, setRespondent] = useState("");
-  const [disputedAmount, setDisputedAmount] = useState("");
-  const [escrowAmount, setEscrowAmount] = useState("");
   const [evidenceRefs, setEvidenceRefs] = useState<string[]>([""]);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderRubric, setNewFolderRubric] = useState("");
+  const [folderCreating, setFolderCreating] = useState(false);
+  const [folderError, setFolderError] = useState<string | null>(null);
+
+  function loadDomains() {
     if (!isContractConfigured(network)) {
       setDomainsLoading(false);
       return;
@@ -38,10 +44,15 @@ export default function SubmitCasePage() {
     listDomains(network)
       .then((d) => {
         setDomains(d);
-        if (d.length > 0) setDomain(d[0].tag);
+        if (d.length > 0) setDomain((current) => (current ? current : d[0].tag));
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load domains."))
       .finally(() => setDomainsLoading(false));
+  }
+
+  useEffect(() => {
+    loadDomains();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [network]);
 
   function updateEvidence(i: number, value: string) {
@@ -56,29 +67,57 @@ export default function SubmitCasePage() {
     setEvidenceRefs((refs) => refs.filter((_, idx) => idx !== i));
   }
 
-  function handleDisputedAmountChange(value: string) {
-    setDisputedAmount(value);
-    const n = parseFloat(value);
-    setEscrowAmount(Number.isFinite(n) && n > 0 ? String(n / 2) : "");
+  function handleDomainChange(value: string) {
+    if (value === NEW_FOLDER_VALUE) {
+      setCreatingFolder(true);
+      return;
+    }
+    setDomain(value);
+  }
+
+  async function handleCreateFolder() {
+    const tag = newFolderName.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!tag) {
+      setFolderError("Folder name is required.");
+      return;
+    }
+    if (!newFolderRubric.trim()) {
+      setFolderError("A grading rubric is required for the new folder.");
+      return;
+    }
+    if (!isConnected) {
+      setFolderError("Connect a wallet before creating a folder.");
+      return;
+    }
+    setFolderError(null);
+    setFolderCreating(true);
+    try {
+      const { provider, account: acct } = await getConnectedProviderAndAccount();
+      await registerDomain(network, tag, newFolderRubric.trim(), provider, acct);
+      loadDomains();
+      setDomain(tag);
+      setCreatingFolder(false);
+      setNewFolderName("");
+      setNewFolderRubric("");
+    } catch (err) {
+      setFolderError(err instanceof Error ? err.message : "Failed to create folder.");
+    } finally {
+      setFolderCreating(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!title.trim()) {
+      setError("Case title is required.");
+      return;
+    }
     if (!description.trim()) {
       setError("Case description is required.");
       return;
     }
     if (!isConnected) {
       setError("Connect a wallet before submitting a case.");
-      return;
-    }
-
-    const amountWei = disputedAmount.trim() ? parseEther(disputedAmount) : 0n;
-    const escrowWei = escrowAmount.trim() ? parseEther(escrowAmount) : 0n;
-    if (amountWei > 0n && escrowWei < amountWei / 2n) {
-      setError(
-        `Escrow must be at least ${formatEther(amountWei / 2n)} GEN, 50% of the disputed amount.`
-      );
       return;
     }
 
@@ -91,19 +130,18 @@ export default function SubmitCasePage() {
     );
 
     try {
-      const { provider, account } = await getConnectedProviderAndAccount();
+      const { provider, account: acct } = await getConnectedProviderAndAccount();
       const { caseId } = await submitCase(
         network,
         {
           domain,
+          title,
           description,
           evidenceRefs: evidenceRefs.filter((r) => r.trim().length > 0),
           respondent,
-          amountWei,
-          escrowWei,
         },
         provider,
-        account
+        acct
       );
       router.push(`/case/${caseId}`);
     } catch (err) {
@@ -147,26 +185,77 @@ export default function SubmitCasePage() {
             <label className="label" htmlFor="domain">Save to folder</label>
             {domainsLoading ? (
               <p className="text-sm text-ink-faint">Loading domains...</p>
-            ) : domains.length === 0 ? (
-              <p className="text-sm text-ink-faint">
-                No domains registered yet. An integrator needs to call{" "}
-                <code className="rounded bg-chrome px-1">register_domain</code> first.
-              </p>
             ) : (
               <select
                 id="domain"
                 className="input"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
+                value={creatingFolder ? NEW_FOLDER_VALUE : domain}
+                onChange={(e) => handleDomainChange(e.target.value)}
                 disabled={submitting}
               >
+                {domains.length === 0 && <option value="">No folders yet</option>}
                 {domains.map((d) => (
                   <option key={d.tag} value={d.tag}>
                     {domainDisplayName(d.tag)}
                   </option>
                 ))}
+                <option value={NEW_FOLDER_VALUE}>+ Create new folder...</option>
               </select>
             )}
+
+            {creatingFolder && (
+              <div className="mt-2 flex flex-col gap-2 rounded-sm border border-chrome-border bg-chrome-pane p-3">
+                <input
+                  className="input"
+                  placeholder="Folder name (e.g. saas-refund-disputes)"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  disabled={folderCreating}
+                />
+                <textarea
+                  className="input min-h-16 resize-y"
+                  placeholder="Grading rubric: the criteria validators use to judge cases in this folder..."
+                  value={newFolderRubric}
+                  onChange={(e) => setNewFolderRubric(e.target.value)}
+                  disabled={folderCreating}
+                />
+                {folderError && <p className="text-xs text-red-600">{folderError}</p>}
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-ink-faint hover:text-ink"
+                    onClick={() => {
+                      setCreatingFolder(false);
+                      setFolderError(null);
+                    }}
+                    disabled={folderCreating}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary !py-1 !text-xs"
+                    onClick={handleCreateFolder}
+                    disabled={folderCreating}
+                  >
+                    {folderCreating ? "Creating..." : "Create folder"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="label" htmlFor="title">Case Title</label>
+            <input
+              id="title"
+              className="input"
+              placeholder="A short, one-line summary of the dispute"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={submitting}
+              required
+            />
           </div>
 
           <div>
@@ -178,39 +267,8 @@ export default function SubmitCasePage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={submitting}
+              required
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label" htmlFor="amount">Disputed Amount (GEN, optional)</label>
-              <input
-                id="amount"
-                type="number"
-                min="0"
-                step="0.0001"
-                className="input"
-                placeholder="0.0"
-                value={disputedAmount}
-                onChange={(e) => handleDisputedAmountChange(e.target.value)}
-                disabled={submitting}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="escrow">Escrow to Lock (GEN)</label>
-              <input
-                id="escrow"
-                type="number"
-                min="0"
-                step="0.0001"
-                className="input"
-                placeholder="0.0"
-                value={escrowAmount}
-                onChange={(e) => setEscrowAmount(e.target.value)}
-                disabled={submitting || !disputedAmount.trim()}
-              />
-              <p className="mt-1 text-[11px] text-ink-faint">Minimum 50% of the disputed amount.</p>
-            </div>
           </div>
 
           <div>
@@ -279,7 +337,7 @@ export default function SubmitCasePage() {
               <button
                 type="submit"
                 className="btn-primary"
-                disabled={!isConnected || domains.length === 0}
+                disabled={!isConnected || domains.length === 0 || creatingFolder}
               >
                 {isConnected ? "Submit for Ruling" : "Connect a wallet to submit"}
               </button>

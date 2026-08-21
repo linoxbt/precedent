@@ -10,9 +10,8 @@ import {
 import VerdictCard from "@/components/VerdictCard";
 import RationaleWithCitations from "@/components/RationaleWithCitations";
 import StatusBar from "@/components/StatusBar";
-import EscrowPanel from "@/components/EscrowPanel";
+import CaseMessages from "@/components/CaseMessages";
 import { DocumentIcon } from "@/components/icons";
-import { formatEther } from "viem";
 import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +44,9 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
           <DocumentIcon />
         </span>
         <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold text-ink">Case #{caseRecord.id}.ruling</h1>
+          <h1 className="truncate text-sm font-semibold text-ink">
+            {caseRecord.title || `Case #${caseRecord.id}`}
+          </h1>
           <p className="truncate text-xs text-ink-faint">
             {domain ? domainDisplayName(domain.tag) : caseRecord.domain}
           </p>
@@ -66,6 +67,13 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
             <p className="label mb-3">Rationale</p>
             <RationaleWithCitations rationale={ruling.rationale} precedents={precedents} />
           </div>
+
+          <CaseMessages
+            network={network}
+            caseId={caseRecord.id}
+            submitter={caseRecord.submitter}
+            respondent={caseRecord.respondent}
+          />
 
           {caseRecord.status === "ruled" && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-chrome-border bg-chrome-pane p-4">
@@ -105,19 +113,6 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
               <dt className="text-ink-faint">Respondent</dt>
               <dd className="break-all font-mono text-ink-muted">{caseRecord.respondent || "None"}</dd>
             </div>
-            {BigInt(caseRecord.amount || "0") > 0n && (
-              <div>
-                <dt className="text-ink-faint">Disputed Amount</dt>
-                <dd className="font-mono text-ink-muted">{formatEther(BigInt(caseRecord.amount))} GEN</dd>
-              </div>
-            )}
-            <EscrowPanel
-              network={network}
-              caseId={caseRecord.id}
-              escrowWei={caseRecord.escrow}
-              escrowWithdrawn={caseRecord.escrowWithdrawn}
-              submitter={caseRecord.submitter}
-            />
             <div>
               <dt className="text-ink-faint">Evidence ({caseRecord.evidenceRefs.length})</dt>
               <dd className="mt-1 flex flex-col gap-1">
