@@ -181,6 +181,38 @@ export function GavelIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+export function MenuIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none">
+      <path d="M3.5 6h13M3.5 10h13M3.5 14h13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function UserIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none">
+      <circle cx="10" cy="6.5" r="3.25" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3.5 17c.9-3.6 4-5.5 6.5-5.5s5.6 1.9 6.5 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function HistoryIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none">
+      <path d="M10 5v5l3.5 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M4.5 6.5A6.5 6.5 0 1 1 3.5 10"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path d="M3.2 4v3h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function WindowDots({ className = "" }: IconProps) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>

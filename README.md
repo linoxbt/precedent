@@ -15,9 +15,9 @@ writes against:
 
 | Network | Chain id | Contract |
 |---|---|---|
-| Asimov Testnet | `4221` | [`0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B`](https://explorer-asimov.genlayer.com/address/0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B) |
+| Asimov Testnet | `4221` | [`0xDDcE98136028e5343252b9320E894455AA260868`](https://explorer-asimov.genlayer.com/address/0xDDcE98136028e5343252b9320E894455AA260868) |
 | Bradbury Testnet | `4221` | same address, same chain as Asimov (see note below) |
-| Studio Network | `61999` | [`0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7`](https://genlayer-explorer.vercel.app/address/0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7) |
+| Studio Network | `61999` | [`0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7`](https://genlayer-explorer.vercel.app/address/0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7) (stale: predates the messaging feature below, see note) |
 
 **Live app**: https://precedent-engine.netlify.app. **Seeded domain** (registered on every
 network above): `freelance-delivery-disputes`.
@@ -29,6 +29,14 @@ network above): `freelance-delivery-disputes`.
 > them as distinct options (matching GenLayer's own `genlayer network set` choices) but a
 > wallet can't actually tell them apart as different chains, and a write against one is
 > immediately visible through the other.
+
+> **Studio Network deploys can lag reads for a long time.** A `genlayer deploy`/`register_domain`
+> to Studio Network can finalize on-chain (a `genlayer receipt` shows `FINALIZED`) while every
+> subsequent read or write against that exact address still 404s ("Contract not found") for
+> minutes at a stretch, observed directly this session across two separate fresh deployments.
+> Asimov/Bradbury did not exhibit this. Until it's understood, avoid redeploying to Studio
+> Network right before a demo; the last confirmed-working Studio address is left in place above
+> even though it predates the messaging feature, rather than risk another silent-lag deploy.
 
 Every ruling is graded against similar past rulings in its domain (via GenLayer's
 Non-Comparative Equivalence Principle) before being accepted, then written into the domain's
@@ -53,14 +61,23 @@ frontend/
 ## Contract (`contracts/precedent_engine.py`)
 
 Implements `register_domain`, `submit_case`, `get_ruling`, `get_case`,
-`get_appeal`, `list_domains`, `get_domain_precedents`, and `appeal`:
+`get_appeal`, `list_domains`, `get_domain_precedents`, `appeal`, `send_case_message`, and
+`get_case_messages`:
 
 - **`submit_case`** retrieves the domain's top-k nearest precedents, has the Leader draft a
   ruling via `gl.eq_principle.prompt_non_comparative`, and grades it against the domain's
-  rubric before accepting and embedding it as precedent.
+  rubric before accepting and embedding it as precedent. There is no dedicated title field:
+  the frontend's "Case Title" input is folded into the first line of `description` (see
+  `encodeCaseText`/`decodeCaseText` in `genlayerClient.ts`), so submitting a title costs no
+  additional contract storage or redeploy.
 - **`appeal`** is `payable`; it requires a bond, re-adjudicates via the same non-comparative
   EP call, and if overturned, the new ruling replaces the original as controlling precedent.
   GenLayer's native appeal ladder supplies the larger validator panel automatically.
+- **`send_case_message`** / **`get_case_messages`** implement a private, case-scoped thread
+  between a case's submitter and respondent (only those two addresses may post). Each message
+  is a JSON-encoded string appended to `CaseRecord.messages: DynArray[str]`, deliberately not
+  a new `TreeMap` or a new `bigint`-bearing dataclass: see the storage-encoder bug note below
+  for why that restraint matters on this contract specifically.
 - State uses GenLayer's typed storage (`TreeMap`, `DynArray`, `@allow_storage @dataclass`)
   rather than raw Python `dict`; plain `dict`/`list` fields are **not** valid Intelligent
   Contract storage types, only valid as transient method arguments.
@@ -118,6 +135,23 @@ whoever deploys next:
    `bigint` is involved. No workaround found from contract code; the escrow feature was
    reverted rather than ship a `payable` method with no reliable way to persist the locked
    value, which risked stranding user funds permanently.
+7. **The `genlayer` CLI's `--args` flag intermittently drops or mis-splits array elements**,
+   independent of the storage bug above: the same `write`/`deploy` command against the same
+   contract would sometimes execute with correct arguments and sometimes fail with e.g.
+   `TypeError: submit_case() missing 3 required positional arguments`, `__init__() takes 1
+   positional argument but 2 were given` (thrown from a *zero-arg* deploy with `--args '[]'`
+   explicitly passed), or a case ID that arrives as the Python string `"['some-id']"` instead
+   of `'some-id'`. Confirmed as a CLI-only issue: the identical call made directly through
+   `genlayer-js`'s `writeContract`/`readContract` (a plain Node script signing with
+   `viem/accounts`' `privateKeyToAccount`, the same path the frontend uses) succeeded every
+   time with the same arguments. Prefer omitting `--args` entirely for zero-arg calls, and
+   don't trust a CLI-reported argument-count/type error as proof the contract itself is wrong
+   without reproducing it through the SDK directly.
+8. **`genlayer-js`'s `waitForTransactionReceipt` defaults to a 30s timeout** (`waitInterval:
+   3000, retries: 10`), which is comfortably shorter than `submit_case`/`appeal` routinely take
+   in practice (an LLM `eq_principle` round across every validator). The frontend was throwing
+   "ruling did not finalize" on writes that were still genuinely in flight. Fixed by passing
+   `{ interval: 3000, retries: 60 }` explicitly for those two calls in `genlayerClient.ts`.
 
 ## Frontend (`frontend/`)
 
@@ -130,11 +164,18 @@ appeals are Properties dialogs, and submitting a case opens a New Item dialog.
 Pages (mapped onto the file-explorer metaphor):
 - **`/`**: Landing / welcome screen: hero, pinned shortcuts, how-it-works, feature highlights.
 - **`/dashboard`**: "Case Files" / "Practice Areas": registered domains rendered as folders with live on-chain item counts.
-- **`/submit`**: "New Case" dialog: domain picker (populated from `list_domains`), description,
-  evidence links, "Validators reviewing..." state while the real transaction confirms.
+- **`/submit`**: "New Case" dialog: domain picker (populated from `list_domains`, with an
+  inline "+ Create new folder..." option that calls `register_domain`), required title and
+  description, evidence links, "Validators reviewing..." state while the real transaction
+  confirms.
 - **`/case/[id]`**: An opened case document: verdict + rationale where every "Precedent #ID"
   mention is a clickable chip that expands that precedent inline (hydrated from `get_case` +
-  `get_ruling` for each cited ID).
+  `get_ruling` for each cited ID), plus a messages panel (`send_case_message` /
+  `get_case_messages`) for the case's submitter and respondent, and a link into the appeal
+  flow as "Open Dispute".
+- **`/profile`**: The connected wallet's address, active network, and native balance.
+- **`/history`**: Every case the connected wallet submitted or was named respondent on,
+  hydrated live from `list_domains` + `get_domain_precedents` + `get_case` across every domain.
 - **`/appeal/[id]`**: A "Properties" dialog: bond input, posts a real `appeal` transaction,
   shows the actual validator count from the transaction receipt's `lastRound.roundValidators`.
 - **`/explorer/[domain]`**: An opened folder: a details-view file list of a domain's case law
@@ -146,6 +187,15 @@ Pages (mapped onto the file-explorer metaphor):
   not statically cached).
 - **`/about`**: An "About.txt" document window: what the protocol does, how consistency is
   enforced, and this deployment's live network/contract details.
+
+**The navigation pane** (`src/components/NavigationPane.tsx`) is resizable by dragging its
+right edge (persisted to `localStorage`), its "Case Files" section collapses via its chevron
+(also persisted), and right-clicking it (or a long-press on touch) opens a "New folder..."
+context menu that registers a domain without leaving the current page. On narrow viewports it
+becomes a slide-out drawer instead of a static column, toggled by the hamburger button in the
+title bar; `src/lib/NavPaneProvider.tsx` is the small context that lets that button (rendered
+in `WindowChrome`) and the drawer itself (rendered in `NavigationPane`, its sibling) agree on
+open/closed state.
 
 **Wallet connection** is Reown AppKit (`@reown/appkit` + `wagmi`), configured with two custom
 chain definitions (`src/lib/chains.ts`): one for the shared Asimov/Bradbury testnet chain
@@ -180,8 +230,8 @@ Visit `http://localhost:3000`.
 ### Environment variables
 
 ```
-NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_ASIMOV=0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B
-NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_BRADBURY=0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B
+NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_ASIMOV=0xDDcE98136028e5343252b9320E894455AA260868
+NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_BRADBURY=0xDDcE98136028e5343252b9320E894455AA260868
 NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_STUDIO=0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7
 
 NEXT_PUBLIC_GENLAYER_RPC_URL_ASIMOV=   # optional override per network; each

@@ -21,12 +21,20 @@ export interface Precedent {
 export interface Case {
   id: string;
   domain: string;
+  /** Short case title. Client-side convention: the first line of the on-chain description. */
+  title: string;
   description: string;
   evidenceRefs: string[];
   submitter: string;
   respondent: string;
   status: CaseStatus;
   createdAt: string;
+  messageCount: number;
+}
+
+export interface CaseMessage {
+  sender: string;
+  text: string;
 }
 
 export interface Ruling {

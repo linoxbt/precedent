@@ -36,7 +36,17 @@ const METHODS = [
   {
     sig: "get_case(case_id: str) -> dict",
     kind: "view",
-    body: "Returns the case's domain, description, evidence references, submitter, respondent, and status.",
+    body: "Returns the case's domain, description, evidence references, submitter, respondent, status, and message count.",
+  },
+  {
+    sig: "send_case_message(case_id: str, text: str) -> None",
+    kind: "write",
+    body: "Posts a message to a case's private thread. Only the case's submitter or respondent may call this; anyone else reverts.",
+  },
+  {
+    sig: "get_case_messages(case_id: str) -> list",
+    kind: "view",
+    body: "Returns every message on a case's thread, oldest first, as {sender, text} objects.",
   },
   {
     sig: "get_appeal(case_id: str) -> dict",

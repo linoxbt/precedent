@@ -10,6 +10,7 @@ import {
 import VerdictCard from "@/components/VerdictCard";
 import RationaleWithCitations from "@/components/RationaleWithCitations";
 import StatusBar from "@/components/StatusBar";
+import CaseMessages from "@/components/CaseMessages";
 import { DocumentIcon } from "@/components/icons";
 import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
 
@@ -43,7 +44,9 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
           <DocumentIcon />
         </span>
         <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold text-ink">Case #{caseRecord.id}.ruling</h1>
+          <h1 className="truncate text-sm font-semibold text-ink">
+            {caseRecord.title || `Case #${caseRecord.id}`}
+          </h1>
           <p className="truncate text-xs text-ink-faint">
             {domain ? domainDisplayName(domain.tag) : caseRecord.domain}
           </p>
@@ -64,6 +67,13 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
             <p className="label mb-3">Rationale</p>
             <RationaleWithCitations rationale={ruling.rationale} precedents={precedents} />
           </div>
+
+          <CaseMessages
+            network={network}
+            caseId={caseRecord.id}
+            submitter={caseRecord.submitter}
+            respondent={caseRecord.respondent}
+          />
 
           {caseRecord.status === "ruled" && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-chrome-border bg-chrome-pane p-4">

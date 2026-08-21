@@ -24,6 +24,7 @@ import math
 APPEAL_BOND_WEI = 10 ** 16  # 0.01 native token; tune per deployment
 TOP_K_PRECEDENTS = 5
 MAX_EVIDENCE_CHARS = 2000
+MAX_MESSAGE_CHARS = 2000
 EMBED_DIM = 64
 
 
@@ -43,6 +44,12 @@ class CaseRecord:
     submitter: Address
     respondent: str
     status: str
+    # JSON-encoded {"sender": "0x...", "text": "..."} strings, oldest first.
+    # Kept as plain str (not a new dataclass/TreeMap) deliberately: see the
+    # "Non-obvious things learned" note in README.md on the GenVM storage bug
+    # that broke the escrow feature when new bigint-bearing storage shapes
+    # were added.
+    messages: DynArray[str]
 
 
 @allow_storage
@@ -117,6 +124,7 @@ class PrecedentEngine(gl.Contract):
             submitter=gl.message.sender_address,
             respondent=respondent,
             status="pending",
+            messages=[],
         )
 
         rubric = self.domains[domain].rubric
@@ -187,6 +195,7 @@ RETRIEVED PRECEDENTS (most similar first): {json.dumps(precedents)}
             "submitter": c.submitter.as_hex,
             "respondent": c.respondent,
             "status": c.status,
+            "message_count": len(c.messages),
         }
 
     @gl.public.view
@@ -287,6 +296,35 @@ RETRIEVED PRECEDENTS: {json.dumps(precedents)}
             self._write_precedent(domain, case_id, description, appeal_ruling)
 
         self.cases[case_id].status = "final"
+
+    # ---------------------------------------------------------------
+    # Case messaging (submitter <-> respondent)
+    # ---------------------------------------------------------------
+
+    @gl.public.write
+    def send_case_message(self, case_id: str, text: str) -> None:
+        if case_id not in self.cases:
+            raise Exception(f"unknown case '{case_id}'")
+        text = text.strip()
+        if not text:
+            raise Exception("message text is required")
+        if len(text) > MAX_MESSAGE_CHARS:
+            raise Exception(f"message too long, max {MAX_MESSAGE_CHARS} characters")
+
+        case = self.cases[case_id]
+        sender_hex = gl.message.sender_address.as_hex.lower()
+        is_submitter = sender_hex == case.submitter.as_hex.lower()
+        is_respondent = bool(case.respondent) and sender_hex == case.respondent.lower()
+        if not (is_submitter or is_respondent):
+            raise Exception("only the case's submitter or respondent can send messages")
+
+        case.messages.append(json.dumps({"sender": sender_hex, "text": text}))
+
+    @gl.public.view
+    def get_case_messages(self, case_id: str) -> list:
+        if case_id not in self.cases:
+            raise Exception(f"unknown case '{case_id}'")
+        return [json.loads(m) for m in self.cases[case_id].messages]
 
     # ---------------------------------------------------------------
     # Internal helpers
