@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { listDomains, submitCase, domainDisplayName } from "@/lib/genlayerClient";
-import { getConnectedProvider } from "@/lib/walletProvider";
+import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
 import { isContractConfigured } from "@/lib/genlayerConfig";
 import ValidatorProgress from "@/components/ValidatorProgress";
 import { NewFileIcon, WindowDots } from "@/components/icons";
@@ -69,7 +69,7 @@ export default function SubmitCasePage() {
     );
 
     try {
-      const provider = await getConnectedProvider();
+      const { provider, account } = await getConnectedProviderAndAccount();
       const { caseId } = await submitCase(
         {
           domain,
@@ -77,7 +77,8 @@ export default function SubmitCasePage() {
           evidenceRefs: evidenceRefs.filter((r) => r.trim().length > 0),
           respondent,
         },
-        provider
+        provider,
+        account
       );
       router.push(`/case/${caseId}`);
     } catch (err) {
@@ -112,7 +113,7 @@ export default function SubmitCasePage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 bg-white p-5">
           <p className="text-xs leading-relaxed text-ink-faint">
-            This opens a real transaction on GenLayer Asimov Testnet — validators draft and grade
+            This opens a real transaction on GenLayer Asimov Testnet: validators draft and grade
             a ruling against the domain&apos;s existing precedent. May take up to a minute.
           </p>
 

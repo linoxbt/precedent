@@ -14,7 +14,7 @@ import { DocumentIcon } from "@/components/icons";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
-  ruled: "Ruled — Open to Appeal",
+  ruled: "Ruled, Open to Appeal",
   appealed: "Under Appeal",
   final: "Final",
 };
@@ -97,7 +97,7 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
             </div>
             <div>
               <dt className="text-ink-faint">Respondent</dt>
-              <dd className="break-all font-mono text-ink-muted">{caseRecord.respondent || "—"}</dd>
+              <dd className="break-all font-mono text-ink-muted">{caseRecord.respondent || "None"}</dd>
             </div>
             <div>
               <dt className="text-ink-faint">Evidence ({caseRecord.evidenceRefs.length})</dt>

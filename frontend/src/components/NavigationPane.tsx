@@ -5,7 +5,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { domainDisplayName, listDomains } from "@/lib/genlayerClient";
 import { isContractConfigured } from "@/lib/genlayerConfig";
-import { ChevronDownIcon, FolderIcon, HelpIcon, NewFileIcon, ThisPcIcon } from "./icons";
+import {
+  ChevronDownIcon,
+  FolderIcon,
+  HelpIcon,
+  InfoIcon,
+  NewFileIcon,
+  RecentIcon,
+  ThisPcIcon,
+} from "./icons";
 import type { DomainConfig } from "@/lib/types";
 
 export default function NavigationPane() {
@@ -39,6 +47,24 @@ export default function NavigationPane() {
           New Case
         </Link>
         <Link
+          href="/recent"
+          className={`flex items-center gap-2 rounded-sm px-2 py-1.5 ${
+            pathname === "/recent" ? "bg-chrome-selected text-ink" : "text-ink-muted hover:bg-chrome-hover hover:text-ink"
+          }`}
+        >
+          <RecentIcon className="h-4 w-4 text-accent-500" />
+          Recent Cases
+        </Link>
+        <Link
+          href="/about"
+          className={`flex items-center gap-2 rounded-sm px-2 py-1.5 ${
+            pathname === "/about" ? "bg-chrome-selected text-ink" : "text-ink-muted hover:bg-chrome-hover hover:text-ink"
+          }`}
+        >
+          <InfoIcon className="h-4 w-4 text-accent-500" />
+          About
+        </Link>
+        <Link
           href="/docs"
           className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-ink-muted hover:bg-chrome-hover hover:text-ink"
         >
@@ -47,7 +73,7 @@ export default function NavigationPane() {
         </Link>
 
         <p className="px-2 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-          This PC
+          Case Files
         </p>
         <Link
           href="/dashboard"
@@ -56,7 +82,7 @@ export default function NavigationPane() {
           }`}
         >
           <ThisPcIcon className="h-4 w-4 text-ink-faint" />
-          Domains
+          Practice Areas
           <ChevronDownIcon className="ml-auto h-3 w-3 text-ink-faint" />
         </Link>
 

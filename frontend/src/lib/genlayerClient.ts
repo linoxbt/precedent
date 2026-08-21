@@ -16,7 +16,7 @@ import type { Appeal, Case, DomainConfig, Precedent, Ruling } from "./types";
  * obtained from Reown AppKit / wagmi, and a fresh write client is created
  * per call so the transaction is signed by whichever account is connected.
  *
- * There is no mock-data fallback — every export here calls the live
+ * There is no mock-data fallback: every export here calls the live
  * contract at NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS on GenLayer Asimov
  * Testnet. If that address isn't configured, calls throw explicitly
  * rather than silently returning fake data.
@@ -40,11 +40,12 @@ const readClient = createClient({
   endpoint: GENLAYER_RPC_URL,
 });
 
-function writeClientFor(provider: EIP1193Provider) {
+function writeClientFor(provider: EIP1193Provider, account: Address) {
   return createClient({
     chain: GENLAYER_CHAIN,
     endpoint: GENLAYER_RPC_URL,
     provider: provider as never,
+    account,
   });
 }
 
@@ -219,10 +220,11 @@ export interface SubmitCaseInput {
 
 export async function submitCase(
   input: SubmitCaseInput,
-  provider: EIP1193Provider
+  provider: EIP1193Provider,
+  account: Address
 ): Promise<{ caseId: string; ruling: Ruling; validatorCount?: number }> {
   const address = requireAddress();
-  const client = writeClientFor(provider);
+  const client = writeClientFor(provider, account);
   const caseId = crypto.randomUUID();
 
   const hash = await client.writeContract({
@@ -235,7 +237,7 @@ export async function submitCase(
   const receipt = await client.waitForTransactionReceipt({ hash });
   const ruling = await getRuling(caseId);
   if (!ruling) {
-    throw new Error("Ruling did not finalize — check the transaction on the explorer.");
+    throw new Error("Ruling did not finalize, check the transaction on the explorer.");
   }
 
   return { caseId, ruling, validatorCount: extractValidatorCount(receipt) };
@@ -248,10 +250,11 @@ export interface AppealInput {
 
 export async function appealRuling(
   input: AppealInput,
-  provider: EIP1193Provider
+  provider: EIP1193Provider,
+  account: Address
 ): Promise<Appeal & { validatorCount?: number }> {
   const address = requireAddress();
-  const client = writeClientFor(provider);
+  const client = writeClientFor(provider, account);
 
   const hash = await client.writeContract({
     address,
@@ -263,7 +266,7 @@ export async function appealRuling(
   const receipt = await client.waitForTransactionReceipt({ hash });
   const appeal = await getAppeal(input.caseId);
   if (!appeal) {
-    throw new Error("Appeal did not finalize — check the transaction on the explorer.");
+    throw new Error("Appeal did not finalize, check the transaction on the explorer.");
   }
 
   return { ...appeal, validatorCount: extractValidatorCount(receipt) };
@@ -272,10 +275,11 @@ export async function appealRuling(
 export async function registerDomain(
   tag: string,
   rubric: string,
-  provider: EIP1193Provider
+  provider: EIP1193Provider,
+  account: Address
 ): Promise<void> {
   const address = requireAddress();
-  const client = writeClientFor(provider);
+  const client = writeClientFor(provider, account);
   const hash = await client.writeContract({
     address,
     functionName: "register_domain",

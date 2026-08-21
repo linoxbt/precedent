@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 type IconProps = { className?: string };
 
 export function FolderIcon({ className = "h-full w-full" }: IconProps) {
@@ -30,17 +32,22 @@ export function DocumentIcon({ className = "h-full w-full", tone = "#0f6cbd" }: 
 }
 
 export function AppIconMark({ className = "h-full w-full" }: IconProps) {
+  const gradientId = `precedentMark-${useId()}`;
   return (
     <svg viewBox="0 0 32 32" className={className} fill="none">
-      <rect width="32" height="32" rx="6" fill="#0f6cbd" />
-      <path
-        d="M10 22V10h6.5a3.5 3.5 0 1 1 0 7H12"
-        stroke="#ffffff"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#2f8fe8" />
+          <stop offset="1" stopColor="#0a4f8f" />
+        </linearGradient>
+      </defs>
+      <rect width="32" height="32" rx="7" fill={`url(#${gradientId})`} />
+      <g transform="rotate(-42 16 13)">
+        <rect x="9.5" y="7.3" width="10.5" height="6.2" rx="1.5" fill="#ffffff" />
+        <rect x="14.4" y="13" width="2.8" height="9.5" rx="1.2" fill="#ffffff" />
+      </g>
+      <rect x="6.5" y="23.2" width="19" height="3.2" rx="1.4" fill="#ffffff" />
+      <rect x="9" y="19.6" width="14" height="1.6" rx="0.8" fill="#ffffff" opacity="0.55" />
     </svg>
   );
 }
@@ -128,6 +135,25 @@ export function HelpIcon({ className = "h-4 w-4" }: IconProps) {
         strokeLinecap="round"
       />
       <circle cx="10" cy="14.3" r="0.9" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function RecentIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none">
+      <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 6v4.2l3 1.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function InfoIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none">
+      <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="10" cy="6.4" r="1" fill="currentColor" />
+      <path d="M10 9.4v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }

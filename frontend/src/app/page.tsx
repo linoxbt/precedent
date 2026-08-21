@@ -10,12 +10,12 @@ const STEPS = [
   {
     n: "02",
     title: "Precedent is retrieved",
-    body: "The contract pulls the domain's most similar past rulings before it drafts anything — the ruling is grounded in case law, not asked to invent one from scratch.",
+    body: "The contract pulls the domain's most similar past rulings before it drafts anything: the ruling is grounded in case law, not asked to invent one from scratch.",
   },
   {
     n: "03",
     title: "Validators grade the ruling",
-    body: "GenLayer's Non-Comparative Equivalence Principle checks whether the ruling is well-reasoned and precedent-consistent — not whether it matches a canonical answer.",
+    body: "GenLayer's Non-Comparative Equivalence Principle checks whether the ruling is well-reasoned and precedent-consistent, not whether it matches a canonical answer.",
   },
   {
     n: "04",
@@ -31,7 +31,7 @@ const FEATURES = [
   },
   {
     title: "A real appeal ladder",
-    body: "Any party can post a bond and escalate. GenLayer's native appeal mechanism doubles the validator panel automatically — no custom escalation logic required.",
+    body: "Any party can post a bond and escalate. GenLayer's native appeal mechanism doubles the validator panel automatically, with no custom escalation logic required.",
   },
   {
     title: "Fully auditable",
@@ -40,7 +40,7 @@ const FEATURES = [
 ];
 
 const SHORTCUTS = [
-  { href: "/dashboard", label: "Domains", icon: <FolderIcon /> },
+  { href: "/dashboard", label: "Practice Areas", icon: <FolderIcon /> },
   { href: "/explorer/freelance-delivery-disputes", label: "Browse Precedent", icon: <FolderIcon /> },
   { href: "/submit", label: "New Case", icon: <DocumentIcon /> },
   { href: "/docs", label: "Help", icon: <HelpIcon /> },
@@ -64,18 +64,18 @@ export default function LandingPage() {
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base text-ink-muted">
             Precedent Engine is a trustless, precedent-consistent adjudication protocol for the
-            agentic economy — a callable judgment API that any contract can invoke, built on
+            agentic economy: a callable judgment API that any contract can invoke, built on
             GenLayer&apos;s Intelligent Contracts and Optimistic Democracy consensus.
           </p>
 
-          <div className="mx-auto mt-10 flex max-w-xl flex-wrap items-start justify-center gap-2">
+          <div className="mx-auto mt-10 grid max-w-xl grid-cols-4 gap-1">
             {SHORTCUTS.map((s) => (
               <Link
                 key={s.href}
                 href={s.href}
-                className="flex w-24 flex-col items-center gap-1.5 rounded-sm px-2 py-3 text-center hover:bg-chrome-hover"
+                className="flex flex-col items-center gap-1.5 rounded-sm px-1 py-3 text-center hover:bg-chrome-hover"
               >
-                <span className="h-10 w-11">{s.icon}</span>
+                <span className="flex h-10 w-10 items-center justify-center">{s.icon}</span>
                 <span className="text-[11px] font-medium text-ink">{s.label}</span>
               </Link>
             ))}

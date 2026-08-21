@@ -4,7 +4,7 @@ import { useState } from "react";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
 import { appealRuling, outcomeLabel } from "@/lib/genlayerClient";
-import { getConnectedProvider } from "@/lib/walletProvider";
+import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
 import ValidatorPanelAvatars from "./ValidatorPanelAvatars";
 import type { Appeal, Ruling } from "@/lib/types";
 
@@ -31,10 +31,11 @@ export default function AppealPanel({
     setError(null);
     setPhase("escalating");
     try {
-      const provider = await getConnectedProvider();
+      const { provider, account } = await getConnectedProviderAndAccount();
       const appeal = await appealRuling(
         { caseId, bondWei: parseEther(bond) },
-        provider
+        provider,
+        account
       );
       setResult(appeal);
       setPhase("done");

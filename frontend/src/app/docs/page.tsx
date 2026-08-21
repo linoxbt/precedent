@@ -59,7 +59,7 @@ export default function DocsPage() {
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="flex items-center gap-2.5 border-b border-chrome-border px-4 py-3">
         <HelpIcon className="h-4 w-4 text-accent-500" />
-        <h1 className="text-sm font-semibold text-ink">Precedent Engine — Help</h1>
+        <h1 className="text-sm font-semibold text-ink">Precedent Engine: Help</h1>
       </div>
 
       <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 px-6 py-8 lg:grid-cols-[1fr_180px]">
@@ -73,7 +73,7 @@ export default function DocsPage() {
             <h2 className="text-lg font-semibold text-ink">Overview</h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-muted">
               Precedent Engine is infrastructure, not an app: a callable judgment API that any
-              contract — on GenLayer or elsewhere — can invoke when it needs a human-judgment-shaped
+              contract, on GenLayer or elsewhere, can invoke when it needs a human-judgment-shaped
               decision made trustlessly. Every ruling is embedded into an on-chain vector store as
               precedent, and every new ruling is checked for consistency against similar past
               rulings before being accepted. It behaves like a rudimentary common-law court:
@@ -129,7 +129,7 @@ export default function DocsPage() {
                   Used to grade &quot;does this ruling respect precedent,&quot; not just &quot;is
                   this a reasonable answer.&quot; The Leader drafts a ruling from the case,
                   evidence, and retrieved precedents; other validators independently check whether
-                  that ruling is well-reasoned and consistent with the domain&apos;s rubric — they
+                  that ruling is well-reasoned and consistent with the domain&apos;s rubric; they
                   don&apos;t have to reproduce it verbatim.
                 </p>
               </div>
@@ -138,7 +138,7 @@ export default function DocsPage() {
                 <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
                   GenLayer&apos;s native appeal mechanism doubles the validator panel on each
                   appeal round automatically. Precedent Engine uses this directly as its appellate
-                  hierarchy — no custom escalation logic required.
+                  hierarchy, with no custom escalation logic required.
                 </p>
               </div>
             </div>
