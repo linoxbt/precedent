@@ -33,7 +33,7 @@ export default function NavigationPane() {
   const pathname = usePathname();
   const { network } = useActiveNetwork();
   const { isConnected } = useAccount();
-  const { mobileOpen, closeMobile } = useNavPane();
+  const { mobileOpen } = useNavPane();
 
   const [domains, setDomains] = useState<DomainConfig[]>([]);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
@@ -283,14 +283,12 @@ export default function NavigationPane() {
         />
       </aside>
 
-      {/* Mobile: slide-out drawer */}
+      {/* Mobile: inline panel, visible by default just like the desktop sidebar; the
+          hamburger button in the title bar collapses it away for those who want the space. */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 sm:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={closeMobile} />
-          <aside className="absolute left-0 top-0 h-full w-64 overflow-y-auto border-r border-chrome-border bg-chrome-pane shadow-lg">
-            {content}
-          </aside>
-        </div>
+        <aside className="block max-h-[50vh] w-full overflow-y-auto border-b border-chrome-border bg-chrome-pane sm:hidden">
+          {content}
+        </aside>
       )}
 
       {contextMenu && (

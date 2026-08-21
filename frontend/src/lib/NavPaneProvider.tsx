@@ -1,8 +1,6 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
-import { useEffect } from "react";
 
 interface NavPaneContextValue {
   mobileOpen: boolean;
@@ -13,13 +11,10 @@ interface NavPaneContextValue {
 const NavPaneContext = createContext<NavPaneContextValue | undefined>(undefined);
 
 export function NavPaneProvider({ children }: { children: ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const pathname = usePathname();
-
-  // Close the drawer on navigation so it doesn't stay open after picking a link.
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  // Visible by default: the nav pane renders inline on mobile just like it
+  // does on desktop, not hidden behind a drawer the user has to discover.
+  // The hamburger button toggles it away for those who want the space back.
+  const [mobileOpen, setMobileOpen] = useState(true);
 
   const value = useMemo(
     () => ({

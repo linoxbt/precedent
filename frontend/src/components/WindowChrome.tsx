@@ -154,7 +154,7 @@ export default function WindowChrome({ children }: { children: React.ReactNode }
         </div>
       </div>
 
-      <div className="flex flex-1">{children}</div>
+      <div className="flex flex-1 flex-col sm:flex-row">{children}</div>
     </div>
   );
 }
