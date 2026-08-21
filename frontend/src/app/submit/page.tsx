@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
+import { formatEther, parseEther } from "viem";
 import { listDomains, submitCase, domainDisplayName } from "@/lib/genlayerClient";
 import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
-import { isContractConfigured } from "@/lib/genlayerConfig";
+import { isContractConfigured, GENLAYER_NETWORKS } from "@/lib/genlayerConfig";
+import { useActiveNetwork } from "@/lib/NetworkProvider";
 import ValidatorProgress from "@/components/ValidatorProgress";
 import { NewFileIcon, WindowDots } from "@/components/icons";
 import type { DomainConfig } from "@/lib/types";
@@ -13,30 +15,34 @@ import type { DomainConfig } from "@/lib/types";
 export default function SubmitCasePage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
+  const { network } = useActiveNetwork();
 
   const [domains, setDomains] = useState<DomainConfig[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(true);
   const [domain, setDomain] = useState("");
   const [description, setDescription] = useState("");
   const [respondent, setRespondent] = useState("");
+  const [disputedAmount, setDisputedAmount] = useState("");
+  const [escrowAmount, setEscrowAmount] = useState("");
   const [evidenceRefs, setEvidenceRefs] = useState<string[]>([""]);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isContractConfigured()) {
+    if (!isContractConfigured(network)) {
       setDomainsLoading(false);
       return;
     }
-    listDomains()
+    setDomainsLoading(true);
+    listDomains(network)
       .then((d) => {
         setDomains(d);
         if (d.length > 0) setDomain(d[0].tag);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load domains."))
       .finally(() => setDomainsLoading(false));
-  }, []);
+  }, [network]);
 
   function updateEvidence(i: number, value: string) {
     setEvidenceRefs((refs) => refs.map((r, idx) => (idx === i ? value : r)));
@@ -50,6 +56,12 @@ export default function SubmitCasePage() {
     setEvidenceRefs((refs) => refs.filter((_, idx) => idx !== i));
   }
 
+  function handleDisputedAmountChange(value: string) {
+    setDisputedAmount(value);
+    const n = parseFloat(value);
+    setEscrowAmount(Number.isFinite(n) && n > 0 ? String(n / 2) : "");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!description.trim()) {
@@ -60,6 +72,16 @@ export default function SubmitCasePage() {
       setError("Connect a wallet before submitting a case.");
       return;
     }
+
+    const amountWei = disputedAmount.trim() ? parseEther(disputedAmount) : 0n;
+    const escrowWei = escrowAmount.trim() ? parseEther(escrowAmount) : 0n;
+    if (amountWei > 0n && escrowWei < amountWei / 2n) {
+      setError(
+        `Escrow must be at least ${formatEther(amountWei / 2n)} GEN, 50% of the disputed amount.`
+      );
+      return;
+    }
+
     setError(null);
     setSubmitting(true);
     setStep(0);
@@ -71,11 +93,14 @@ export default function SubmitCasePage() {
     try {
       const { provider, account } = await getConnectedProviderAndAccount();
       const { caseId } = await submitCase(
+        network,
         {
           domain,
           description,
           evidenceRefs: evidenceRefs.filter((r) => r.trim().length > 0),
           respondent,
+          amountWei,
+          escrowWei,
         },
         provider,
         account
@@ -88,15 +113,16 @@ export default function SubmitCasePage() {
     }
   }
 
-  if (!isContractConfigured()) {
+  if (!isContractConfigured(network)) {
     return (
       <div className="flex flex-1 items-start justify-center p-8">
         <div className="panel max-w-md p-6 text-sm text-ink-muted">
-          No contract is configured yet (NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS is unset). See the{" "}
+          No contract is configured on {GENLAYER_NETWORKS[network].label} yet (its
+          NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_* env var is unset). See the{" "}
           <a href="/docs" className="font-medium text-accent-600 underline">
             Help
           </a>{" "}
-          window for deployment instructions.
+          window for deployment instructions, or switch networks above.
         </div>
       </div>
     );
@@ -113,8 +139,8 @@ export default function SubmitCasePage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 bg-white p-5">
           <p className="text-xs leading-relaxed text-ink-faint">
-            This opens a real transaction on GenLayer Asimov Testnet: validators draft and grade
-            a ruling against the domain&apos;s existing precedent. May take up to a minute.
+            This opens a real transaction on {GENLAYER_NETWORKS[network].label}: validators draft
+            and grade a ruling against the domain&apos;s existing precedent. May take up to a minute.
           </p>
 
           <div>
@@ -153,6 +179,38 @@ export default function SubmitCasePage() {
               onChange={(e) => setDescription(e.target.value)}
               disabled={submitting}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="amount">Disputed Amount (GEN, optional)</label>
+              <input
+                id="amount"
+                type="number"
+                min="0"
+                step="0.0001"
+                className="input"
+                placeholder="0.0"
+                value={disputedAmount}
+                onChange={(e) => handleDisputedAmountChange(e.target.value)}
+                disabled={submitting}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="escrow">Escrow to Lock (GEN)</label>
+              <input
+                id="escrow"
+                type="number"
+                min="0"
+                step="0.0001"
+                className="input"
+                placeholder="0.0"
+                value={escrowAmount}
+                onChange={(e) => setEscrowAmount(e.target.value)}
+                disabled={submitting || !disputedAmount.trim()}
+              />
+              <p className="mt-1 text-[11px] text-ink-faint">Minimum 50% of the disputed amount.</p>
+            </div>
           </div>
 
           <div>

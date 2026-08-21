@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDomainPrecedents, listDomains } from "@/lib/genlayerClient";
-import { isContractConfigured } from "@/lib/genlayerConfig";
+import { isContractConfigured, GENLAYER_NETWORKS } from "@/lib/genlayerConfig";
+import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
 import ExplorerTable from "@/components/ExplorerTable";
 import StatusBar from "@/components/StatusBar";
 import { RecentIcon } from "@/components/icons";
@@ -8,22 +9,23 @@ import { RecentIcon } from "@/components/icons";
 export const dynamic = "force-dynamic";
 
 export default async function RecentCasesPage() {
-  if (!isContractConfigured()) {
+  const network = await getActiveNetworkServer();
+  if (!isContractConfigured(network)) {
     return (
       <div className="flex flex-1 items-start justify-center p-8">
         <div className="panel max-w-md p-6 text-sm text-ink-muted">
-          No contract is configured yet (NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS is unset). See the{" "}
+          No contract is configured on {GENLAYER_NETWORKS[network].label} yet. See the{" "}
           <Link href="/docs" className="font-medium text-accent-600 underline">
             Help
           </Link>{" "}
-          window for deployment instructions.
+          window for deployment instructions, or switch networks above.
         </div>
       </div>
     );
   }
 
-  const domains = await listDomains();
-  const perDomain = await Promise.all(domains.map((d) => getDomainPrecedents(d.tag)));
+  const domains = await listDomains(network);
+  const perDomain = await Promise.all(domains.map((d) => getDomainPrecedents(network, d.tag)));
   const precedents = perDomain.flat();
 
   return (

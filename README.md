@@ -5,17 +5,31 @@ case law for AI judgment, built on GenLayer's Intelligent Contracts and Optimist
 consensus. Built from `PrecedentEngineBuildSpec.pdf` (GenLayer Hackathon technical spec).
 
 **This is a real, deployed, working system**, not a mock or a demo shell. The contract below
-is live on GenLayer Asimov Testnet, the frontend talks to it directly through `genlayer-js`,
+is live on multiple GenLayer networks, the frontend talks to it directly through `genlayer-js`,
 and wallet connection is handled by Reown AppKit. There is no mock-data fallback anywhere in
 the app: every page reads live contract state, and every write (`submit_case`, `appeal`,
-`register_domain`) is a real signed transaction that runs an LLM-backed validator round.
+`register_domain`, `withdraw_escrow`) is a real signed transaction that runs an LLM-backed
+validator round.
 
-| | |
-|---|---|
-| **Live app** | https://precedent-engine.netlify.app |
-| **Contract** | [`0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B`](https://explorer-asimov.genlayer.com/address/0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B) |
-| **Network** | GenLayer Asimov Testnet (chain id `4221`) |
-| **Seeded domain** | `freelance-delivery-disputes` |
+The title bar's network switcher lets you pick which GenLayer network the app reads and
+writes against:
+
+| Network | Chain id | Contract |
+|---|---|---|
+| Asimov Testnet | `4221` | [`0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B`](https://explorer-asimov.genlayer.com/address/0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B) |
+| Bradbury Testnet | `4221` | same address, same chain as Asimov (see note below) |
+| Studio Network | `61999` | [`0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7`](https://genlayer-explorer.vercel.app/address/0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7) |
+
+**Live app**: https://precedent-engine.netlify.app. **Seeded domain** (registered on every
+network above): `freelance-delivery-disputes`.
+
+> **Asimov and Bradbury are the same chain.** Both report chain id `4221`, and querying the
+> same address through either RPC returns identical bytecode, identical balances, and
+> block heights seconds apart, confirmed directly against both RPC endpoints. They're two
+> gateway hostnames for one network, not two separate deployments, so the switcher shows
+> them as distinct options (matching GenLayer's own `genlayer network set` choices) but a
+> wallet can't actually tell them apart as different chains, and a write against one is
+> immediately visible through the other.
 
 Every ruling is graded against similar past rulings in its domain (via GenLayer's
 Non-Comparative Equivalence Principle) before being accepted, then written into the domain's
@@ -39,12 +53,21 @@ frontend/
 
 ## Contract (`contracts/precedent_engine.py`)
 
-Implements `register_domain`, `submit_case`, `get_ruling`, `get_case`, `get_appeal`,
-`list_domains`, `get_domain_precedents`, and `appeal`:
+Implements `register_domain`, `submit_case`, `withdraw_escrow`, `get_ruling`, `get_case`,
+`get_appeal`, `list_domains`, `get_domain_precedents`, and `appeal`:
 
 - **`submit_case`** retrieves the domain's top-k nearest precedents, has the Leader draft a
   ruling via `gl.eq_principle.prompt_non_comparative`, and grades it against the domain's
-  rubric before accepting and embedding it as precedent.
+  rubric before accepting and embedding it as precedent. It's `payable` and takes an optional
+  `amount` (the disputed amount, in wei): when set, the caller must lock at least 50% of it as
+  escrow (the transaction value) or the call reverts.
+- **`withdraw_escrow`** refunds a case's locked escrow to its submitter once the case has a
+  ruling. The one exception: if the submitter appealed their own case and the escalated panel
+  affirmed the original ruling, the escrow is forfeited rather than refunded, on top of the
+  appeal bond they already posted. Sending the refund to a plain wallet address (not another
+  Intelligent Contract) is routed through an `@gl.evm.contract_interface` ghost-contract proxy's
+  `emit_transfer`, per genlayer-studio's `faucet.py` example; a contract can't `emit_transfer`
+  straight to an EOA otherwise.
 - **`appeal`** is `payable`; it requires a bond, re-adjudicates via the same non-comparative
   EP call, and if overturned, the new ruling replaces the original as controlling precedent.
   GenLayer's native appeal ladder supplies the larger validator panel automatically.
@@ -122,15 +145,25 @@ Pages (mapped onto the file-explorer metaphor):
 - **`/about`**: An "About.txt" document window: what the protocol does, how consistency is
   enforced, and this deployment's live network/contract details.
 
-**Wallet connection** is Reown AppKit (`@reown/appkit` + `wagmi`), configured for a custom
-GenLayer Asimov Testnet chain definition (`src/lib/chains.ts`). `src/lib/walletProvider.ts`
-pulls the connected wallet's raw EIP-1193 provider so `genlayer-js` can sign transactions with
-whichever account is connected.
+**Wallet connection** is Reown AppKit (`@reown/appkit` + `wagmi`), configured with two custom
+chain definitions (`src/lib/chains.ts`): one for the shared Asimov/Bradbury testnet chain
+(`4221`) and one for Studio Network (`61999`). `src/lib/walletProvider.ts` pulls the connected
+wallet's raw EIP-1193 provider so `genlayer-js` can sign transactions with whichever account is
+connected.
 
-**Data flow** is entirely through `src/lib/genlayerClient.ts`: every exported function calls
-the live contract via `genlayer-js`'s `readContract`/`writeContract`. There is no mock branch:
-if `NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS` isn't set, calls throw explicitly and the UI shows a
-"not configured" state rather than silently falling back to fake data.
+**Network selection** lives in `src/lib/genlayerConfig.ts` (`GENLAYER_NETWORKS`, one entry per
+network with its own chain, RPC URL, explorer, and contract address) and
+`src/lib/NetworkProvider.tsx` (a client-side `network`/`setNetwork` context, persisted to a
+`genlayer-network` cookie so both client components and server-rendered pages, via
+`src/lib/activeNetworkServer.ts`, agree on which network is active). Picking a network whose
+chain id differs from the wallet's current one (Studio vs. the testnet) also triggers a real
+wallet chain switch through wagmi's `useSwitchChain`.
+
+**Data flow** is entirely through `src/lib/genlayerClient.ts`: every exported function takes an
+explicit `network` argument and calls that network's live contract via `genlayer-js`'s
+`readContract`/`writeContract`. There is no mock branch: if a network's contract address isn't
+configured, calls throw explicitly and the UI shows a "not configured" state for that network
+rather than silently falling back to fake data.
 
 ### Running locally
 
@@ -145,10 +178,23 @@ Visit `http://localhost:3000`.
 ### Environment variables
 
 ```
-NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS=0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B
-NEXT_PUBLIC_GENLAYER_RPC_URL=          # optional, defaults to the Asimov testnet RPC
+NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_ASIMOV=0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B
+NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_BRADBURY=0xa43d54ab8E1F5B4b84d277D6a3c92d3942De7b5B
+NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_STUDIO=0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7
+
+NEXT_PUBLIC_GENLAYER_RPC_URL_ASIMOV=   # optional override per network; each
+NEXT_PUBLIC_GENLAYER_RPC_URL_BRADBURY= # defaults to GenLayer's own public RPC
+NEXT_PUBLIC_GENLAYER_RPC_URL_STUDIO=   # for that network
+
 NEXT_PUBLIC_REOWN_PROJECT_ID=          # from https://cloud.reown.com, free signup
 ```
+
+At least one `NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_*` is required; the switcher only offers a
+network whose address is set. These are read via literal `process.env.NEXT_PUBLIC_*` member
+expressions in `genlayerConfig.ts`, not a helper keyed by a string: Next.js only inlines
+`NEXT_PUBLIC_*` vars into the client bundle when it can statically see the literal access, so a
+dynamic `process.env[name]` lookup silently resolves to `undefined` client-side even though it
+still works server-side, a real bug hit and fixed while building this.
 
 ### Deploying your own instance
 

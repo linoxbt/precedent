@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { domainDisplayName, listDomains } from "@/lib/genlayerClient";
 import { isContractConfigured } from "@/lib/genlayerConfig";
+import { useActiveNetwork } from "@/lib/NetworkProvider";
 import {
   ChevronDownIcon,
   FolderIcon,
@@ -18,14 +19,18 @@ import type { DomainConfig } from "@/lib/types";
 
 export default function NavigationPane() {
   const pathname = usePathname();
+  const { network } = useActiveNetwork();
   const [domains, setDomains] = useState<DomainConfig[]>([]);
 
   useEffect(() => {
-    if (!isContractConfigured()) return;
-    listDomains()
+    if (!isContractConfigured(network)) {
+      setDomains([]);
+      return;
+    }
+    listDomains(network)
       .then(setDomains)
       .catch(() => setDomains([]));
-  }, []);
+  }, [network]);
 
   if (pathname === "/") return null;
 

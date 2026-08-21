@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { GENLAYER_CHAIN, GENLAYER_EXPLORER_URL, PRECEDENT_ENGINE_ADDRESS } from "@/lib/genlayerConfig";
+import { GENLAYER_NETWORKS } from "@/lib/genlayerConfig";
+import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
 import { HelpIcon } from "@/components/icons";
 
 const SECTIONS = [
@@ -18,9 +19,14 @@ const METHODS = [
     body: "Registers a new case domain and its grading rubric. The rubric is the criteria text used when validators grade a ruling under the Non-Comparative Equivalence Principle.",
   },
   {
-    sig: "submit_case(case_id: str, domain: str, description: str, evidence_refs: list[str], respondent: str = \"\") -> None",
+    sig: "submit_case(case_id: str, domain: str, description: str, evidence_refs: list[str], respondent: str = \"\", amount: int = 0) -> None",
+    kind: "write, payable",
+    body: "Opens a case. Retrieves the domain's nearest precedents, has the Leader draft a ruling grounded in them, and grades the ruling under the Non-Comparative Equivalence Principle before accepting and embedding it as precedent. If amount (the disputed amount, in wei) is set, at least 50% of it must be sent as the transaction value, locked as escrow.",
+  },
+  {
+    sig: "withdraw_escrow(case_id: str) -> None",
     kind: "write",
-    body: "Opens a case. Retrieves the domain's nearest precedents, has the Leader draft a ruling grounded in them, and grades the ruling under the Non-Comparative Equivalence Principle before accepting and embedding it as precedent.",
+    body: "Refunds a case's locked escrow to its submitter once the case has been ruled on. Exception: if the submitter appealed and the escalated panel affirmed the original ruling, the escrow is forfeited instead of refunded.",
   },
   {
     sig: "appeal(case_id: str) -> None",
@@ -35,7 +41,7 @@ const METHODS = [
   {
     sig: "get_case(case_id: str) -> dict",
     kind: "view",
-    body: "Returns the case's domain, description, evidence references, submitter, respondent, and status.",
+    body: "Returns the case's domain, description, evidence references, submitter, respondent, status, disputed amount, locked escrow, and whether that escrow has been withdrawn.",
   },
   {
     sig: "get_appeal(case_id: str) -> dict",
@@ -54,7 +60,11 @@ const METHODS = [
   },
 ];
 
-export default function DocsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function DocsPage() {
+  const network = await getActiveNetworkServer();
+  const cfg = GENLAYER_NETWORKS[network];
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="flex items-center gap-2.5 border-b border-chrome-border px-4 py-3">
@@ -188,16 +198,28 @@ export default function DocsPage() {
                 <tbody className="divide-y divide-chrome-border">
                   <tr>
                     <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-ink">
-                      NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS
+                      NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_ASIMOV
+                      <br />
+                      NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_BRADBURY
+                      <br />
+                      NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_STUDIO
                     </td>
-                    <td className="px-4 py-2.5 text-ink-muted">Deployed contract address. Required.</td>
+                    <td className="px-4 py-2.5 text-ink-muted">
+                      Deployed contract address per network. At least one is required; the
+                      network switcher only offers a network whose address is set.
+                    </td>
                   </tr>
                   <tr>
                     <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-ink">
-                      NEXT_PUBLIC_GENLAYER_RPC_URL
+                      NEXT_PUBLIC_GENLAYER_RPC_URL_ASIMOV
+                      <br />
+                      NEXT_PUBLIC_GENLAYER_RPC_URL_BRADBURY
+                      <br />
+                      NEXT_PUBLIC_GENLAYER_RPC_URL_STUDIO
                     </td>
                     <td className="px-4 py-2.5 text-ink-muted">
-                      Optional override; defaults to the Asimov testnet RPC.
+                      Optional per-network RPC override; each defaults to GenLayer&apos;s own
+                      public RPC for that network.
                     </td>
                   </tr>
                   <tr>
@@ -226,19 +248,19 @@ export default function DocsPage() {
               <dl className="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="text-ink-faint">Network</dt>
-                  <dd className="font-mono text-ink">{GENLAYER_CHAIN.name}</dd>
+                  <dd className="font-mono text-ink">{cfg.chain.name}</dd>
                 </div>
                 <div>
                   <dt className="text-ink-faint">Contract</dt>
                   <dd className="break-all font-mono text-ink">
-                    {PRECEDENT_ENGINE_ADDRESS ? (
+                    {cfg.contractAddress ? (
                       <a
-                        href={`${GENLAYER_EXPLORER_URL}address/${PRECEDENT_ENGINE_ADDRESS}`}
+                        href={`${cfg.explorerUrl}address/${cfg.contractAddress}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-accent-600 underline"
                       >
-                        {PRECEDENT_ENGINE_ADDRESS}
+                        {cfg.contractAddress}
                       </a>
                     ) : (
                       "not configured"

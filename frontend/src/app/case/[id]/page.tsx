@@ -10,7 +10,12 @@ import {
 import VerdictCard from "@/components/VerdictCard";
 import RationaleWithCitations from "@/components/RationaleWithCitations";
 import StatusBar from "@/components/StatusBar";
+import EscrowPanel from "@/components/EscrowPanel";
 import { DocumentIcon } from "@/components/icons";
+import { formatEther } from "viem";
+import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
+
+export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -21,15 +26,16 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function CaseRulingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [caseRecord, ruling] = await Promise.all([getCase(id), getRuling(id)]);
+  const network = await getActiveNetworkServer();
+  const [caseRecord, ruling] = await Promise.all([getCase(network, id), getRuling(network, id)]);
 
   if (!caseRecord || !ruling) {
     notFound();
   }
 
   const [domain, precedents] = await Promise.all([
-    getDomain(caseRecord.domain),
-    getDomainPrecedents(caseRecord.domain),
+    getDomain(network, caseRecord.domain),
+    getDomainPrecedents(network, caseRecord.domain),
   ]);
 
   return (
@@ -99,6 +105,19 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
               <dt className="text-ink-faint">Respondent</dt>
               <dd className="break-all font-mono text-ink-muted">{caseRecord.respondent || "None"}</dd>
             </div>
+            {BigInt(caseRecord.amount || "0") > 0n && (
+              <div>
+                <dt className="text-ink-faint">Disputed Amount</dt>
+                <dd className="font-mono text-ink-muted">{formatEther(BigInt(caseRecord.amount))} GEN</dd>
+              </div>
+            )}
+            <EscrowPanel
+              network={network}
+              caseId={caseRecord.id}
+              escrowWei={caseRecord.escrow}
+              escrowWithdrawn={caseRecord.escrowWithdrawn}
+              submitter={caseRecord.submitter}
+            />
             <div>
               <dt className="text-ink-faint">Evidence ({caseRecord.evidenceRefs.length})</dt>
               <dd className="mt-1 flex flex-col gap-1">

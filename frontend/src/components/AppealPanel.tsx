@@ -5,16 +5,19 @@ import { parseEther } from "viem";
 import { useAccount } from "wagmi";
 import { appealRuling, outcomeLabel } from "@/lib/genlayerClient";
 import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
+import type { GenLayerNetworkKey } from "@/lib/genlayerConfig";
 import ValidatorPanelAvatars from "./ValidatorPanelAvatars";
 import type { Appeal, Ruling } from "@/lib/types";
 
 const DEFAULT_BOND_GEN = "0.01";
 
 export default function AppealPanel({
+  network,
   caseId,
   originalRuling,
   existingAppeal,
 }: {
+  network: GenLayerNetworkKey;
   caseId: string;
   originalRuling: Ruling;
   existingAppeal?: Appeal;
@@ -33,6 +36,7 @@ export default function AppealPanel({
     try {
       const { provider, account } = await getConnectedProviderAndAccount();
       const appeal = await appealRuling(
+        network,
         { caseId, bondWei: parseEther(bond) },
         provider,
         account

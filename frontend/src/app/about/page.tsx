@@ -1,12 +1,13 @@
 import Link from "next/link";
-import {
-  GENLAYER_CHAIN,
-  GENLAYER_EXPLORER_URL,
-  PRECEDENT_ENGINE_ADDRESS,
-} from "@/lib/genlayerConfig";
+import { GENLAYER_NETWORKS } from "@/lib/genlayerConfig";
+import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
 import { DocumentIcon, WindowDots } from "@/components/icons";
 
-export default function AboutPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AboutPage() {
+  const network = await getActiveNetworkServer();
+  const cfg = GENLAYER_NETWORKS[network];
   return (
     <div className="flex flex-1 items-start justify-center overflow-y-auto bg-chrome p-6">
       <div className="dialog w-full max-w-2xl animate-window-open">
@@ -53,19 +54,19 @@ export default function AboutPage() {
             <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-ink-faint">Network</dt>
-                <dd className="font-mono text-ink">{GENLAYER_CHAIN.name}</dd>
+                <dd className="font-mono text-ink">{cfg.chain.name}</dd>
               </div>
               <div>
                 <dt className="text-ink-faint">Contract</dt>
                 <dd className="break-all font-mono text-ink">
-                  {PRECEDENT_ENGINE_ADDRESS ? (
+                  {cfg.contractAddress ? (
                     <a
-                      href={`${GENLAYER_EXPLORER_URL}address/${PRECEDENT_ENGINE_ADDRESS}`}
+                      href={`${cfg.explorerUrl}address/${cfg.contractAddress}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-accent-600 underline"
                     >
-                      {PRECEDENT_ENGINE_ADDRESS}
+                      {cfg.contractAddress}
                     </a>
                   ) : (
                     "not configured"

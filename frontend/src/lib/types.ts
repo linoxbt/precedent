@@ -27,6 +27,11 @@ export interface Case {
   respondent: string;
   status: CaseStatus;
   createdAt: string;
+  /** Disputed amount declared by the submitter, in wei (as a decimal string). "0" if not specified. */
+  amount: string;
+  /** Escrow actually locked at submission, in wei (as a decimal string). "0" if none. */
+  escrow: string;
+  escrowWithdrawn: boolean;
 }
 
 export interface Ruling {
