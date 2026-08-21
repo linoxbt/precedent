@@ -1,0 +1,276 @@
+import Link from "next/link";
+import { GENLAYER_CHAIN, GENLAYER_EXPLORER_URL, PRECEDENT_ENGINE_ADDRESS } from "@/lib/genlayerConfig";
+
+const SECTIONS = [
+  { id: "overview", label: "Overview" },
+  { id: "architecture", label: "Architecture" },
+  { id: "contract", label: "Contract API" },
+  { id: "genlayer", label: "GenLayer Concepts" },
+  { id: "deploy", label: "Deploy Your Own" },
+  { id: "env", label: "Environment Variables" },
+];
+
+const METHODS = [
+  {
+    sig: "register_domain(tag: str, rubric: str) -> None",
+    kind: "write",
+    body: "Registers a new case domain and its grading rubric. The rubric is the criteria text used when validators grade a ruling under the Non-Comparative Equivalence Principle.",
+  },
+  {
+    sig: "submit_case(case_id: str, domain: str, description: str, evidence_refs: list[str], respondent: str = \"\") -> None",
+    kind: "write",
+    body: "Opens a case. Retrieves the domain's nearest precedents, has the Leader draft a ruling grounded in them, and grades the ruling under the Non-Comparative Equivalence Principle before accepting and embedding it as precedent.",
+  },
+  {
+    sig: "appeal(case_id: str) -> None",
+    kind: "write, payable",
+    body: "Posts a bond and triggers GenLayer's native escalating validator round. An overturned ruling replaces the original as the domain's controlling precedent; an affirmed ruling forfeits the bond.",
+  },
+  {
+    sig: "get_ruling(case_id: str) -> dict",
+    kind: "view",
+    body: "Returns the ruling's outcome, rationale, cited precedent IDs, confidence, and round.",
+  },
+  {
+    sig: "get_case(case_id: str) -> dict",
+    kind: "view",
+    body: "Returns the case's domain, description, evidence references, submitter, respondent, and status.",
+  },
+  {
+    sig: "get_appeal(case_id: str) -> dict",
+    kind: "view",
+    body: "Returns the appellant, bond, status (affirmed/overturned), and the escalated ruling for a case's appeal, if one exists.",
+  },
+  {
+    sig: "list_domains() -> list",
+    kind: "view",
+    body: "Returns every registered domain's tag, rubric, and integrator address.",
+  },
+  {
+    sig: "get_domain_precedents(domain: str, limit: int = 20) -> list",
+    kind: "view",
+    body: "Returns the most recent precedent case IDs and outcome summaries for a domain.",
+  },
+];
+
+export default function DocsPage() {
+  return (
+    <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-6 py-12 lg:grid-cols-[200px_1fr]">
+      <aside className="hidden lg:block">
+        <nav className="sticky top-24 flex flex-col gap-1 text-sm">
+          {SECTIONS.map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="rounded-md px-3 py-1.5 text-navy-500 transition-colors hover:bg-navy-50 hover:text-navy-900"
+            >
+              {s.label}
+            </a>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="min-w-0">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gold">
+          Documentation
+        </p>
+        <h1 className="font-serif text-3xl font-semibold text-navy-900">Precedent Engine</h1>
+        <p className="mt-2 max-w-2xl text-sm text-navy-500">
+          A trustless, precedent-consistent adjudication protocol built on GenLayer&apos;s
+          Intelligent Contracts and Optimistic Democracy consensus.
+        </p>
+
+        <section id="overview" className="mt-12 scroll-mt-24">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">Overview</h2>
+          <p className="mt-3 text-sm leading-relaxed text-navy-600">
+            Precedent Engine is infrastructure, not an app: a callable judgment API that any
+            contract — on GenLayer or elsewhere — can invoke when it needs a human-judgment-shaped
+            decision made trustlessly. Every ruling is embedded into an on-chain vector store as
+            precedent, and every new ruling is checked for consistency against similar past
+            rulings before being accepted. It behaves like a rudimentary common-law court:
+            rulings compound into a growing, queryable, self-consistent body of case law instead
+            of each decision being an isolated judgment call.
+          </p>
+        </section>
+
+        <section id="architecture" className="mt-12 scroll-mt-24">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">Architecture</h2>
+          <p className="mt-3 text-sm leading-relaxed text-navy-600">
+            The frontend talks to a single Intelligent Contract deployed on GenLayer Asimov
+            Testnet through <code className="rounded bg-navy-50 px-1">genlayer-js</code>. Reads
+            (view calls) go through a shared read-only client; writes are signed by whichever
+            wallet is connected via Reown AppKit.
+          </p>
+          <div className="mt-4 overflow-x-auto rounded-lg border border-navy-100 bg-navy-900 p-5 font-mono text-xs leading-relaxed text-navy-100">
+            <pre>{`Browser (React) ──▶ genlayer-js client ──▶ GenLayer Asimov Testnet
+                                              │
+                          PrecedentEngine Intelligent Contract
+                                              │
+                     ┌────────────────────────┼────────────────────────┐
+                     ▼                        ▼                        ▼
+             Leader drafts ruling    Non-Comparative EP grading   Precedent write-back
+             (gl.exec_prompt via     (validators check reasoning   (deterministic
+              prompt_non_comparative) vs. domain rubric)            hashing embedding)`}</pre>
+          </div>
+        </section>
+
+        <section id="contract" className="mt-12 scroll-mt-24">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">Contract API</h2>
+          <div className="mt-4 flex flex-col gap-4">
+            {METHODS.map((m) => (
+              <div key={m.sig} className="card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <code className="text-sm font-semibold text-navy-800">{m.sig}</code>
+                  <span className="whitespace-nowrap rounded-full border border-navy-200 bg-navy-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-navy-500">
+                    {m.kind}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-navy-500">{m.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="genlayer" className="mt-12 scroll-mt-24">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">GenLayer Concepts</h2>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="card p-5">
+              <h3 className="font-serif text-base font-semibold text-navy-900">
+                Non-Comparative Equivalence Principle
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-navy-500">
+                Used to grade &quot;does this ruling respect precedent,&quot; not just &quot;is
+                this a reasonable answer.&quot; The Leader drafts a ruling from the case,
+                evidence, and retrieved precedents; other validators independently check whether
+                that ruling is well-reasoned and consistent with the domain&apos;s rubric — they
+                don&apos;t have to reproduce it verbatim.
+              </p>
+            </div>
+            <div className="card p-5">
+              <h3 className="font-serif text-base font-semibold text-navy-900">
+                Escalating appeal ladder
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-navy-500">
+                GenLayer&apos;s native appeal mechanism doubles the validator panel on each
+                appeal round automatically. Precedent Engine uses this directly as its appellate
+                hierarchy — no custom escalation logic required.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="deploy" className="mt-12 scroll-mt-24">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">Deploy Your Own</h2>
+          <ol className="mt-3 flex flex-col gap-2 text-sm leading-relaxed text-navy-600">
+            <li>
+              1. Install the CLI: <code className="rounded bg-navy-50 px-1">npm install genlayer</code>
+            </li>
+            <li>
+              2. Create and fund a testnet account:{" "}
+              <code className="rounded bg-navy-50 px-1">genlayer account create</code>, then claim GEN
+              from the{" "}
+              <a
+                href="https://testnet-faucet.genlayer.foundation/"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-navy-800 underline"
+              >
+                testnet faucet
+              </a>
+              .
+            </li>
+            <li>
+              3. Deploy: <code className="rounded bg-navy-50 px-1">genlayer deploy --contract contracts/precedent_engine.py</code>
+            </li>
+            <li>
+              4. Register a domain:{" "}
+              <code className="rounded bg-navy-50 px-1">genlayer write &lt;address&gt; register_domain --args &lt;tag&gt; &lt;rubric&gt;</code>
+            </li>
+            <li>5. Set the environment variables below and redeploy the frontend.</li>
+          </ol>
+        </section>
+
+        <section id="env" className="mt-12 scroll-mt-24 pb-12">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">Environment Variables</h2>
+          <div className="mt-4 overflow-x-auto rounded-lg border border-navy-100">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-navy-50/60 text-xs font-semibold uppercase tracking-wide text-navy-500">
+                <tr>
+                  <th className="px-4 py-3">Variable</th>
+                  <th className="px-4 py-3">Purpose</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-100">
+                <tr>
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-navy-700">
+                    NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS
+                  </td>
+                  <td className="px-4 py-3 text-navy-500">Deployed contract address. Required.</td>
+                </tr>
+                <tr>
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-navy-700">
+                    NEXT_PUBLIC_GENLAYER_RPC_URL
+                  </td>
+                  <td className="px-4 py-3 text-navy-500">
+                    Optional override; defaults to the Asimov testnet RPC.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-navy-700">
+                    NEXT_PUBLIC_REOWN_PROJECT_ID
+                  </td>
+                  <td className="px-4 py-3 text-navy-500">
+                    Wallet-connect project ID from{" "}
+                    <a
+                      href="https://cloud.reown.com"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-navy-800 underline"
+                    >
+                      cloud.reown.com
+                    </a>
+                    .
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-8 card p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy-400">
+              This deployment
+            </p>
+            <dl className="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-navy-400">Network</dt>
+                <dd className="font-mono text-navy-700">{GENLAYER_CHAIN.name}</dd>
+              </div>
+              <div>
+                <dt className="text-navy-400">Contract</dt>
+                <dd className="break-all font-mono text-navy-700">
+                  {PRECEDENT_ENGINE_ADDRESS ? (
+                    <a
+                      href={`${GENLAYER_EXPLORER_URL}address/${PRECEDENT_ENGINE_ADDRESS}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      {PRECEDENT_ENGINE_ADDRESS}
+                    </a>
+                  ) : (
+                    "not configured"
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <p className="mt-6 text-sm text-navy-500">
+            Ready to try it? <Link href="/submit" className="font-medium text-navy-800 underline">Submit a case</Link> or{" "}
+            <Link href="/dashboard" className="font-medium text-navy-800 underline">browse the dashboard</Link>.
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
