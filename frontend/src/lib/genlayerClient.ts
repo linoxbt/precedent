@@ -72,7 +72,7 @@ async function sleep(ms: number): Promise<void> {
  * deploy tx is FINALIZED on-chain). Retry with backoff instead of failing on the
  * first miss.
  */
-async function retryRead<T>(fn: () => Promise<T | undefined>, attempts = 6): Promise<T | undefined> {
+export async function retryRead<T>(fn: () => Promise<T | undefined>, attempts = 6): Promise<T | undefined> {
   for (let i = 0; i < attempts; i++) {
     const result = await fn();
     if (result !== undefined) return result;
@@ -270,7 +270,7 @@ export async function submitCase(
   input: SubmitCaseInput,
   provider: EIP1193Provider,
   account: Address
-): Promise<{ caseId: string; ruling: Ruling; validatorCount?: number }> {
+): Promise<{ caseId: string; ruling?: Ruling; validatorCount?: number }> {
   const address = requireAddress(network);
   const client = writeClientFor(network, provider, account);
   const caseId = crypto.randomUUID();
@@ -298,12 +298,12 @@ export async function submitCase(
       `submit_case failed on-chain (tx ${hash}). Check the transaction on the explorer for details.`
     );
   }
+  // The write itself is confirmed at this point, so the case genuinely exists
+  // on-chain even if the ruling read hasn't caught up yet. Don't block
+  // navigation on it: return whatever's available and let the case page show
+  // a "ruling pending" state and poll for the rest, rather than throwing an
+  // error the caller has no path to recover from.
   const ruling = await retryRead(() => getRuling(network, caseId));
-  if (!ruling) {
-    throw new Error(
-      `Case was submitted (tx ${hash}) but the ruling hasn't shown up in reads yet. Check the transaction on the explorer, then refresh this page in a moment.`
-    );
-  }
 
   return { caseId, ruling, validatorCount: extractValidatorCount(receipt) };
 }
