@@ -15,9 +15,9 @@ writes against:
 
 | Network | Chain id | Contract |
 |---|---|---|
-| Asimov Testnet | `4221` | [`0xDDcE98136028e5343252b9320E894455AA260868`](https://explorer-asimov.genlayer.com/address/0xDDcE98136028e5343252b9320E894455AA260868) |
+| Asimov Testnet | `4221` | [`0xCf80B24056866d500A45674Fd21e016Cc7fE7F63`](https://explorer-asimov.genlayer.com/address/0xCf80B24056866d500A45674Fd21e016Cc7fE7F63) |
 | Bradbury Testnet | `4221` | same address, same chain as Asimov (see note below) |
-| Studio Network | `61999` | [`0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7`](https://genlayer-explorer.vercel.app/address/0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7) (stale: predates the messaging feature below, see note) |
+| Studio Network | `61999` | [`0x49B61b6a0F9Ae4C2bF116264920cD8913bA53aE6`](https://genlayer-explorer.vercel.app/address/0x49B61b6a0F9Ae4C2bF116264920cD8913bA53aE6) |
 
 **Live app**: https://precedent-engine.netlify.app. **Seeded domain** (registered on every
 network above): `freelance-delivery-disputes`.
@@ -30,13 +30,14 @@ network above): `freelance-delivery-disputes`.
 > wallet can't actually tell them apart as different chains, and a write against one is
 > immediately visible through the other.
 
-> **Studio Network deploys can lag reads for a long time.** A `genlayer deploy`/`register_domain`
-> to Studio Network can finalize on-chain (a `genlayer receipt` shows `FINALIZED`) while every
-> subsequent read or write against that exact address still 404s ("Contract not found") for
-> minutes at a stretch, observed directly this session across two separate fresh deployments.
-> Asimov/Bradbury did not exhibit this. Until it's understood, avoid redeploying to Studio
-> Network right before a demo; the last confirmed-working Studio address is left in place above
-> even though it predates the messaging feature, rather than risk another silent-lag deploy.
+> **Studio Network deploys have intermittently lagged reads for a long time.** A `genlayer
+> deploy`/`register_domain` to Studio Network can finalize on-chain (a `genlayer receipt` shows
+> `FINALIZED`) while every subsequent read or write against that exact address still 404s
+> ("Contract not found") for minutes at a stretch; observed directly across two separate fresh
+> deployments earlier in this project. A later redeploy (the address in the table above) showed
+> no lag at all: `register_domain` and both seeded demo cases landed and read back cleanly on
+> the first attempt. Treat it as an intermittent risk rather than a given, and budget slack
+> before a live demo just in case.
 
 Every ruling is graded against similar past rulings in its domain (via GenLayer's
 Non-Comparative Equivalence Principle) before being accepted, then written into the domain's
@@ -152,6 +153,14 @@ whoever deploys next:
    in practice (an LLM `eq_principle` round across every validator). The frontend was throwing
    "ruling did not finalize" on writes that were still genuinely in flight. Fixed by passing
    `{ interval: 3000, retries: 60 }` explicitly for those two calls in `genlayerClient.ts`.
+9. **`gl.get_webpage(url, mode="text")` fails deterministically for any `http(s)` URL** on the
+   GenVM build these networks run, confirmed by submitting cases with real `evidence_refs`
+   (`https://example.com`, real GitHub/Netlify/docs URLs): every attempt reached full-quorum
+   `AGREE` consensus on a `FINISHED_WITH_ERROR` result, meaning the failure is deterministic
+   and reproducible, not congestion. No prior demo case in this project had ever exercised this
+   code path (all used empty `evidence_refs`), so this was previously undiscovered. Until it's
+   fixed upstream, avoid `http`-prefixed `evidence_refs` entirely; cite real URLs directly in
+   the case description text instead (never fetched, so it's unaffected).
 
 ## Frontend (`frontend/`)
 
@@ -230,9 +239,9 @@ Visit `http://localhost:3000`.
 ### Environment variables
 
 ```
-NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_ASIMOV=0xDDcE98136028e5343252b9320E894455AA260868
-NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_BRADBURY=0xDDcE98136028e5343252b9320E894455AA260868
-NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_STUDIO=0x6E7F86B32ae3bC0c2114e04a1c5C6d9C275A59a7
+NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_ASIMOV=0xCf80B24056866d500A45674Fd21e016Cc7fE7F63
+NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_BRADBURY=0xCf80B24056866d500A45674Fd21e016Cc7fE7F63
+NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_STUDIO=0x49B61b6a0F9Ae4C2bF116264920cD8913bA53aE6
 
 NEXT_PUBLIC_GENLAYER_RPC_URL_ASIMOV=   # optional override per network; each
 NEXT_PUBLIC_GENLAYER_RPC_URL_BRADBURY= # defaults to GenLayer's own public RPC
