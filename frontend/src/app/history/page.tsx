@@ -9,6 +9,7 @@ import {
   getDomainPrecedentSummaries,
   listDomains,
 } from "@/lib/genlayerClient";
+import { getRecordedCaseIds } from "@/lib/caseHistoryStore";
 import { isContractConfigured } from "@/lib/genlayerConfig";
 import { useActiveNetwork } from "@/lib/NetworkProvider";
 import WalletConnectButton from "@/components/WalletConnectButton";
@@ -31,19 +32,34 @@ export default function HistoryPage() {
 
     async function load() {
       const domains = await listDomains(network);
-      const results: Case[] = [];
-      for (const d of domains) {
-        const summaries = await getDomainPrecedentSummaries(network, d.tag, 50);
-        const hydrated = await Promise.all(summaries.map((s) => getCase(network, s.caseId)));
-        for (const c of hydrated) {
-          if (!c) continue;
-          const isMine =
-            c.submitter.toLowerCase() === myAddress ||
-            (!!c.respondent && c.respondent.toLowerCase() === myAddress);
-          if (isMine) results.push(c);
-        }
+      const isMine = (c: Case) =>
+        c.submitter.toLowerCase() === myAddress ||
+        (!!c.respondent && c.respondent.toLowerCase() === myAddress);
+
+      // get_domain_precedents only lists cases that have already been ruled
+      // (see _write_precedent in the contract), so it misses anything still
+      // pending or that never reached consensus. Run per domain in parallel.
+      const perDomain = await Promise.all(
+        domains.map(async (d) => {
+          const summaries = await getDomainPrecedentSummaries(network, d.tag, 50);
+          const hydrated = await Promise.all(summaries.map((s) => getCase(network, s.caseId)));
+          return hydrated.filter((c): c is Case => !!c && isMine(c));
+        })
+      );
+
+      // Supplement with cases this browser itself submitted, read directly
+      // by ID regardless of ruling status, so a just-submitted or still-
+      // pending case shows up immediately instead of waiting for a ruling.
+      const recordedIds = getRecordedCaseIds(network);
+      const recorded = await Promise.all(recordedIds.map((id) => getCase(network, id)));
+
+      const byId = new Map<string, Case>();
+      for (const c of perDomain.flat()) byId.set(c.id, c);
+      for (const c of recorded) {
+        if (c && isMine(c)) byId.set(c.id, c);
       }
-      if (!cancelled) setCases(results);
+
+      if (!cancelled) setCases(Array.from(byId.values()));
     }
 
     load().catch(() => {

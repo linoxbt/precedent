@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import {
   domainDisplayName,
   getAppeal,
@@ -6,9 +5,12 @@ import {
   getDomain,
   getRuling,
   outcomeLabel,
+  retryRead,
 } from "@/lib/genlayerClient";
 import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
 import AppealPanel from "@/components/AppealPanel";
+import PendingCase from "@/components/PendingCase";
+import PendingRuling from "@/components/PendingRuling";
 import { GavelIcon, WindowDots } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +18,19 @@ export const dynamic = "force-dynamic";
 export default async function AppealPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const network = await getActiveNetworkServer();
-  const [caseRecord, ruling] = await Promise.all([getCase(network, id), getRuling(network, id)]);
+  // Same read-lag concern as the case page: a case/ruling that's genuinely
+  // on-chain can still take a moment to show up in reads, so this shouldn't
+  // hard-404 any more than the case page does.
+  const [caseRecord, ruling] = await Promise.all([
+    retryRead(() => getCase(network, id), 4),
+    retryRead(() => getRuling(network, id), 4),
+  ]);
 
-  if (!caseRecord || !ruling) {
-    notFound();
+  if (!caseRecord) {
+    return <PendingCase network={network} caseId={id} />;
+  }
+  if (!ruling) {
+    return <PendingRuling network={network} caseId={id} />;
   }
 
   const [domain, existingAppeal] = await Promise.all([

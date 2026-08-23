@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { listDomains, submitCase, registerDomain, domainDisplayName } from "@/lib/genlayerClient";
 import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
+import { recordSubmittedCase } from "@/lib/caseHistoryStore";
 import { isContractConfigured, GENLAYER_NETWORKS } from "@/lib/genlayerConfig";
 import { useActiveNetwork } from "@/lib/NetworkProvider";
 import ValidatorProgress from "@/components/ValidatorProgress";
@@ -116,6 +117,10 @@ export default function SubmitCasePage() {
       setError("Case description is required.");
       return;
     }
+    if (respondent.trim() && !/^0x[a-fA-F0-9]{40}$/.test(respondent.trim())) {
+      setError("Respondent address must be a valid 0x... address, or left blank.");
+      return;
+    }
     if (!isConnected) {
       setError("Connect a wallet before submitting a case.");
       return;
@@ -144,6 +149,7 @@ export default function SubmitCasePage() {
         acct
       );
       stepTimers.forEach(clearTimeout);
+      recordSubmittedCase(network, caseId);
       router.push(`/case/${caseId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ruling failed. Try again.");

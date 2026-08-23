@@ -24,9 +24,16 @@ export default async function RecentCasesPage() {
     );
   }
 
-  const domains = await listDomains(network);
-  const perDomain = await Promise.all(domains.map((d) => getDomainPrecedents(network, d.tag)));
-  const precedents = perDomain.flat();
+  let domains: Awaited<ReturnType<typeof listDomains>> = [];
+  let precedents: Awaited<ReturnType<typeof getDomainPrecedents>> = [];
+  let loadError: string | null = null;
+  try {
+    domains = await listDomains(network);
+    const perDomain = await Promise.all(domains.map((d) => getDomainPrecedents(network, d.tag)));
+    precedents = perDomain.flat();
+  } catch (err) {
+    loadError = err instanceof Error ? err.message : "Failed to read from the contract.";
+  }
 
   return (
     <div className="flex flex-1 flex-col">
@@ -42,7 +49,11 @@ export default async function RecentCasesPage() {
         </div>
       </div>
 
-      {precedents.length === 0 ? (
+      {loadError ? (
+        <div className="p-4">
+          <div className="panel p-6 text-sm text-red-600">{loadError}</div>
+        </div>
+      ) : precedents.length === 0 ? (
         <div className="p-4">
           <div className="panel p-6 text-sm text-ink-muted">
             No rulings yet. Once a case is submitted and ruled on, it will appear here.

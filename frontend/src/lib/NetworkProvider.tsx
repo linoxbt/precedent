@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useChainId, useSwitchChain } from "wagmi";
 import {
@@ -33,11 +33,12 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
-  const [network, setNetworkState] = useState<GenLayerNetworkKey>(DEFAULT_GENLAYER_NETWORK);
-
-  useEffect(() => {
-    setNetworkState(readNetworkCookie());
-  }, []);
+  // Lazy initializer: on the server this runs before `document` exists and
+  // falls back to the default, but on the client it runs during hydration
+  // (a genuine first render, not a post-mount effect), so it picks up the
+  // real cookie value immediately instead of rendering the default network
+  // for a moment and re-fetching once a useEffect catches up.
+  const [network, setNetworkState] = useState<GenLayerNetworkKey>(() => readNetworkCookie());
 
   const setNetwork = useCallback(
     (next: GenLayerNetworkKey) => {

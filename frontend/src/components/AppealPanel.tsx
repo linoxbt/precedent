@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
-import { appealRuling, outcomeLabel } from "@/lib/genlayerClient";
+import { appealRuling, getAppeal, outcomeLabel } from "@/lib/genlayerClient";
 import { getConnectedProviderAndAccount } from "@/lib/walletProvider";
 import type { GenLayerNetworkKey } from "@/lib/genlayerConfig";
 import ValidatorPanelAvatars from "./ValidatorPanelAvatars";
 import type { Appeal, Ruling } from "@/lib/types";
 
 const DEFAULT_BOND_GEN = "0.01";
+const MIN_BOND_GEN = 0.01;
+const CONFIRM_POLL_MS = 4000;
+const CONFIRM_MAX_ATTEMPTS = 45; // ~3 minutes, matching PendingRuling/PendingCase
 
 export default function AppealPanel({
   network,
@@ -24,26 +27,69 @@ export default function AppealPanel({
 }) {
   const { isConnected } = useAccount();
   const [bond, setBond] = useState(DEFAULT_BOND_GEN);
-  const [phase, setPhase] = useState<"idle" | "escalating" | "done">(
+  const [phase, setPhase] = useState<"idle" | "escalating" | "confirming" | "done">(
     existingAppeal ? "done" : "idle"
   );
   const [result, setResult] = useState<Appeal | undefined>(existingAppeal);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [confirmAttempts, setConfirmAttempts] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // Polls for the appeal once a bond tx has confirmed on-chain but the read
+  // hasn't caught up yet. Never falls back to "idle": the bond is already
+  // spent, so re-showing the submit form would risk a second bond for the
+  // same appeal.
+  useEffect(() => {
+    if (phase !== "confirming") return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      if (cancelled) return;
+      const appeal = await getAppeal(network, caseId).catch(() => undefined);
+      if (cancelled) return;
+      if (appeal) {
+        setResult(appeal);
+        setPhase("done");
+        return;
+      }
+      setConfirmAttempts((a) => {
+        const next = a + 1;
+        if (next >= CONFIRM_MAX_ATTEMPTS) clearInterval(id);
+        return next;
+      });
+    }, CONFIRM_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [phase, network, caseId]);
+
   async function handleAppeal() {
+    const bondValue = Number(bond);
+    if (!Number.isFinite(bondValue) || bondValue < MIN_BOND_GEN) {
+      setError(`Bond must be at least ${MIN_BOND_GEN} GEN.`);
+      return;
+    }
     setError(null);
     setPhase("escalating");
     try {
       const { provider, account } = await getConnectedProviderAndAccount();
-      const appeal = await appealRuling(
+      const { hash, appeal } = await appealRuling(
         network,
         { caseId, bondWei: parseEther(bond) },
         provider,
         account
       );
-      setResult(appeal);
-      setPhase("done");
+      if (appeal) {
+        setResult(appeal);
+        setPhase("done");
+      } else {
+        setTxHash(hash);
+        setConfirmAttempts(0);
+        setPhase("confirming");
+      }
     } catch (err) {
+      // A tx that never got sent (e.g. wallet not connected, user rejected
+      // the signature) is safe to let the user retry from the idle form.
       setError(err instanceof Error ? err.message : "Appeal failed. Try again.");
       setPhase("idle");
     }
@@ -68,7 +114,7 @@ export default function AppealPanel({
             <input
               id="bond"
               type="number"
-              min="0.001"
+              min={MIN_BOND_GEN}
               step="0.001"
               className="input"
               value={bond}
@@ -99,6 +145,27 @@ export default function AppealPanel({
         <p className="text-sm text-ink-muted">
           GenLayer&apos;s native appeal ladder is running an independent, larger validator round
           for this case. Bond posted: {bond} GEN. This can take up to a minute.
+        </p>
+      </div>
+    );
+  }
+
+  if (phase === "confirming") {
+    const timedOut = confirmAttempts >= CONFIRM_MAX_ATTEMPTS;
+    return (
+      <div className="flex flex-col gap-4 bg-white p-5">
+        <p className="label mb-0">{timedOut ? "Still confirming" : "Bond Confirmed, Awaiting Read"}</p>
+        <div className="flex items-center gap-4">
+          <ValidatorPanelAvatars count={3} pulsing={!timedOut} />
+          <span className="text-sm font-medium text-ink-muted">
+            {timedOut ? "This is taking longer than usual." : "Finalizing the escalated round..."}
+          </span>
+        </div>
+        <p className="text-sm text-ink-muted">
+          Your bond of {bond} GEN was accepted on-chain{txHash ? ` (tx ${txHash})` : ""}. The appeal
+          outcome hasn&apos;t shown up in reads yet, but the transaction already succeeded, so this
+          page will keep checking and update automatically &mdash; there&apos;s no need to submit
+          again.
         </p>
       </div>
     );

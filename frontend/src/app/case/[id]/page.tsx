@@ -76,7 +76,11 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
 
               <div className="panel mt-4 p-5">
                 <p className="label mb-3">Rationale</p>
-                <RationaleWithCitations rationale={ruling.rationale} precedents={precedents} />
+                <RationaleWithCitations
+                  rationale={ruling.rationale}
+                  precedents={precedents}
+                  citedPrecedentIds={ruling.citedPrecedentIds}
+                />
               </div>
             </>
           ) : (
@@ -90,7 +94,7 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
             respondent={caseRecord.respondent}
           />
 
-          {caseRecord.status === "ruled" && (
+          {caseRecord.status === "ruled" && ruling && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-chrome-border bg-chrome-pane p-4">
               <div>
                 <p className="text-sm font-semibold text-ink">Disagree with this ruling?</p>

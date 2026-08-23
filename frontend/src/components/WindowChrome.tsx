@@ -66,16 +66,16 @@ export default function WindowChrome({ children }: { children: React.ReactNode }
   const router = useRouter();
   const crumbs = useMemo(() => buildCrumbs(pathname), [pathname]);
   const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2] : undefined;
-  const { toggleMobile } = useNavPane();
+  const { togglePane } = useNavPane();
 
   return (
     <div className="flex min-h-screen flex-col">
       <div className="flex items-center gap-3 border-b border-chrome-border bg-chrome-titlebar px-4 py-2">
         <button
           type="button"
-          onClick={toggleMobile}
-          aria-label="Toggle navigation"
-          className="toolbar-btn !px-1.5 sm:hidden"
+          onClick={togglePane}
+          aria-label="Toggle navigation pane"
+          className="toolbar-btn !px-1.5"
         >
           <MenuIcon />
         </button>

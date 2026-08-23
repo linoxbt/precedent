@@ -24,8 +24,30 @@ import math
 APPEAL_BOND_WEI = 10 ** 16  # 0.01 native token; tune per deployment
 TOP_K_PRECEDENTS = 5
 MAX_EVIDENCE_CHARS = 2000
+MAX_EVIDENCE_REFS = 20  # caps webpage-fetch fan-out per case_input()/appeal_input() call
 MAX_MESSAGE_CHARS = 2000
 EMBED_DIM = 64
+
+
+def _parse_ruling_json(raw: str) -> dict:
+    """Defensively parse the LLM's ruling JSON.
+
+    The prompt asks for a strict shape, but nothing guarantees compliance;
+    raise a clear, specific exception instead of letting a stray KeyError or
+    JSONDecodeError abort the transaction with an opaque message.
+    """
+    cleaned = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        data = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise Exception(f"ruling response was not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise Exception("ruling response was not a JSON object")
+    if not data.get("outcome"):
+        raise Exception("ruling response is missing a required 'outcome' field")
+    if not data.get("rationale"):
+        raise Exception("ruling response is missing a required 'rationale' field")
+    return data
 
 
 @allow_storage
@@ -116,6 +138,8 @@ class PrecedentEngine(gl.Contract):
             raise Exception(f"unknown domain '{domain}'")
         if case_id in self.cases:
             raise Exception(f"case '{case_id}' already exists")
+        if len(evidence_refs) > MAX_EVIDENCE_REFS:
+            raise Exception(f"too many evidence refs, max {MAX_EVIDENCE_REFS}")
 
         self.cases[case_id] = CaseRecord(
             domain=domain,
@@ -160,7 +184,7 @@ RETRIEVED PRECEDENTS (most similar first): {json.dumps(precedents)}
             '"cited_precedent_ids": [...], "confidence": 0.0}',
             criteria=rubric,
         )
-        ruling_data = json.loads(ruling_json.replace("```json", "").replace("```", "").strip())
+        ruling_data = _parse_ruling_json(ruling_json)
         ruling = RulingRecord(
             outcome=ruling_data["outcome"],
             rationale=ruling_data["rationale"],
@@ -235,8 +259,8 @@ RETRIEVED PRECEDENTS (most similar first): {json.dumps(precedents)}
             raise Exception(f"no ruling to appeal for case '{case_id}'")
         if gl.message.value < APPEAL_BOND_WEI:
             raise Exception(f"appeal bond must be >= {APPEAL_BOND_WEI}")
-        if case_id in self.appeals and self.appeals[case_id].status == "pending":
-            raise Exception("appeal already in progress for this case")
+        if self.cases[case_id].status == "final":
+            raise Exception("this case has already been through its appeal round")
 
         case = self.cases[case_id]
         domain = case.domain
@@ -273,7 +297,7 @@ RETRIEVED PRECEDENTS: {json.dumps(precedents)}
             '"cited_precedent_ids": [...], "confidence": 0.0, "affirmed": true}',
             criteria=rubric,
         )
-        appeal_data = json.loads(appeal_ruling_json.replace("```json", "").replace("```", "").strip())
+        appeal_data = _parse_ruling_json(appeal_ruling_json)
         appeal_ruling = RulingRecord(
             outcome=appeal_data["outcome"],
             rationale=appeal_data["rationale"],

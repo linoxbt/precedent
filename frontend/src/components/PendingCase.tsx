@@ -22,7 +22,7 @@ export default function PendingCase({ network, caseId }: { network: GenLayerNetw
 
   useEffect(() => {
     let cancelled = false;
-    async function poll() {
+    const id = setInterval(async () => {
       if (cancelled) return;
       const found = await getCase(network, caseId).catch(() => undefined);
       if (cancelled) return;
@@ -30,9 +30,12 @@ export default function PendingCase({ network, caseId }: { network: GenLayerNetw
         router.refresh();
         return;
       }
-      setAttempts((a) => a + 1);
-    }
-    const id = setInterval(poll, POLL_MS);
+      setAttempts((a) => {
+        const next = a + 1;
+        if (next >= MAX_ATTEMPTS) clearInterval(id);
+        return next;
+      });
+    }, POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);

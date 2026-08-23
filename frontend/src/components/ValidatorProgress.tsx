@@ -31,6 +31,9 @@ export default function ValidatorProgress({ activeStep }: { activeStep: number }
           </li>
         ))}
       </ul>
+      <p className="text-[11px] text-ink-faint">
+        These steps are an approximate sequence, not live status from the validators.
+      </p>
     </div>
   );
 }

@@ -133,8 +133,8 @@ function decodeCaseText(raw: string): { title: string; description: string } {
 }
 
 export async function getCase(network: GenLayerNetworkKey, caseId: string): Promise<Case | undefined> {
-  const address = requireAddress(network);
   try {
+    const address = requireAddress(network);
     const c = (await readClientFor(network).readContract({
       address,
       functionName: "get_case",
@@ -167,8 +167,8 @@ export async function getCase(network: GenLayerNetworkKey, caseId: string): Prom
 }
 
 export async function getRuling(network: GenLayerNetworkKey, caseId: string): Promise<Ruling | undefined> {
-  const address = requireAddress(network);
   try {
+    const address = requireAddress(network);
     const r = (await readClientFor(network).readContract({
       address,
       functionName: "get_ruling",
@@ -177,7 +177,10 @@ export async function getRuling(network: GenLayerNetworkKey, caseId: string): Pr
       outcome: string;
       rationale: string;
       cited_precedent_ids: string[];
-      confidence: number;
+      // The contract serializes confidence as a string (floats aren't
+      // calldata-encodable in a view return); coerce it back to a number
+      // below so callers get the type they're actually promised.
+      confidence: number | string;
       round: number;
     };
     return {
@@ -185,8 +188,8 @@ export async function getRuling(network: GenLayerNetworkKey, caseId: string): Pr
       outcome: r.outcome,
       rationale: r.rationale,
       citedPrecedentIds: r.cited_precedent_ids ?? [],
-      confidence: r.confidence,
-      round: r.round,
+      confidence: Number(r.confidence),
+      round: Number(r.round),
     };
   } catch {
     return undefined;
@@ -218,8 +221,8 @@ export async function getDomainPrecedents(network: GenLayerNetworkKey, domain: s
 }
 
 export async function getAppeal(network: GenLayerNetworkKey, caseId: string): Promise<Appeal | undefined> {
-  const address = requireAddress(network);
   try {
+    const address = requireAddress(network);
     const a = (await readClientFor(network).readContract({
       address,
       functionName: "get_appeal",
@@ -232,7 +235,7 @@ export async function getAppeal(network: GenLayerNetworkKey, caseId: string): Pr
         outcome: string;
         rationale: string;
         cited_precedent_ids: string[];
-        confidence: number;
+        confidence: number | string;
         round: number;
       };
     };
@@ -247,8 +250,8 @@ export async function getAppeal(network: GenLayerNetworkKey, caseId: string): Pr
             outcome: a.escalated_ruling.outcome,
             rationale: a.escalated_ruling.rationale,
             citedPrecedentIds: a.escalated_ruling.cited_precedent_ids ?? [],
-            confidence: a.escalated_ruling.confidence,
-            round: a.escalated_ruling.round,
+            confidence: Number(a.escalated_ruling.confidence),
+            round: Number(a.escalated_ruling.round),
           }
         : undefined,
     };
@@ -318,7 +321,7 @@ export async function appealRuling(
   input: AppealInput,
   provider: EIP1193Provider,
   account: Address
-): Promise<Appeal & { validatorCount?: number }> {
+): Promise<{ hash: string; appeal?: Appeal & { validatorCount?: number } }> {
   const address = requireAddress(network);
   const client = writeClientFor(network, provider, account);
 
@@ -336,14 +339,15 @@ export async function appealRuling(
       `appeal failed on-chain (tx ${hash}). Check the transaction on the explorer for details.`
     );
   }
+  // The bond has already been taken and the write is confirmed at this point,
+  // so the appeal genuinely exists on-chain even if the read hasn't caught up
+  // yet. Don't throw here: a caller that reacts to a thrown error by
+  // resetting to a "submit again" UI would let the user post a second bond
+  // for a transaction that already succeeded. Return no appeal instead and
+  // let the caller poll for it.
   const appeal = await retryRead(() => getAppeal(network, input.caseId));
-  if (!appeal) {
-    throw new Error(
-      `Appeal was submitted (tx ${hash}) but hasn't shown up in reads yet. Check the transaction on the explorer, then refresh this page in a moment.`
-    );
-  }
 
-  return { ...appeal, validatorCount: extractValidatorCount(receipt) };
+  return { hash, appeal: appeal ? { ...appeal, validatorCount: extractValidatorCount(receipt) } : undefined };
 }
 
 export async function registerDomain(

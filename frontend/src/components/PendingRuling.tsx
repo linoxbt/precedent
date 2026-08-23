@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getRuling } from "@/lib/genlayerClient";
 import type { GenLayerNetworkKey } from "@/lib/genlayerConfig";
@@ -18,21 +18,23 @@ const MAX_ATTEMPTS = 45; // ~3 minutes, matching submitCase's own write-wait cei
 export default function PendingRuling({ network, caseId }: { network: GenLayerNetworkKey; caseId: string }) {
   const router = useRouter();
   const [attempts, setAttempts] = useState(0);
-  const stopped = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
-    async function poll() {
-      if (cancelled || stopped.current) return;
+    const id = setInterval(async () => {
+      if (cancelled) return;
       const ruling = await getRuling(network, caseId).catch(() => undefined);
       if (cancelled) return;
       if (ruling) {
         router.refresh();
         return;
       }
-      setAttempts((a) => a + 1);
-    }
-    const id = setInterval(poll, POLL_MS);
+      setAttempts((a) => {
+        const next = a + 1;
+        if (next >= MAX_ATTEMPTS) clearInterval(id);
+        return next;
+      });
+    }, POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);

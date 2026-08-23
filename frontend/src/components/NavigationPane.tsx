@@ -33,7 +33,7 @@ export default function NavigationPane() {
   const pathname = usePathname();
   const { network } = useActiveNetwork();
   const { isConnected } = useAccount();
-  const { mobileOpen } = useNavPane();
+  const { paneOpen } = useNavPane();
 
   const [domains, setDomains] = useState<DomainConfig[]>([]);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
@@ -161,7 +161,16 @@ export default function NavigationPane() {
     : undefined;
 
   const content = (
-    <nav className="flex flex-col gap-0.5 px-2 py-2 text-sm">
+    <nav
+      className="flex flex-col gap-0.5 px-2 py-2 text-sm"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY);
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={clearLongPress}
+      onTouchMove={clearLongPress}
+    >
       <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
         Quick access
       </p>
@@ -223,13 +232,6 @@ export default function NavigationPane() {
       <button
         type="button"
         onClick={toggleCollapsed}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          openContextMenu(e.clientX, e.clientY);
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={clearLongPress}
-        onTouchMove={clearLongPress}
         className="mt-4 flex items-center gap-2 rounded-sm px-2 py-1.5 text-left text-ink-muted hover:bg-chrome-hover hover:text-ink"
       >
         <ThisPcIcon className="h-4 w-4 text-ink-faint" />
@@ -269,23 +271,26 @@ export default function NavigationPane() {
 
   return (
     <>
-      {/* Desktop: static, resizable sidebar */}
-      <aside
-        className="relative hidden shrink-0 border-r border-chrome-border bg-chrome-pane sm:block"
-        style={{ width }}
-      >
-        <div className="h-full overflow-y-auto">{content}</div>
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          onMouseDown={() => setResizing(true)}
-          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-accent-500/40"
-        />
-      </aside>
+      {/* Desktop: static, resizable sidebar. The title bar's toggle button
+          collapses it away entirely, not just the Case Files subtree. */}
+      {paneOpen && (
+        <aside
+          className="relative hidden shrink-0 border-r border-chrome-border bg-chrome-pane sm:block"
+          style={{ width }}
+        >
+          <div className="h-full overflow-y-auto">{content}</div>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={() => setResizing(true)}
+            className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-accent-500/40"
+          />
+        </aside>
+      )}
 
       {/* Mobile: inline panel, visible by default just like the desktop sidebar; the
-          hamburger button in the title bar collapses it away for those who want the space. */}
-      {mobileOpen && (
+          same toggle button collapses it away for those who want the space. */}
+      {paneOpen && (
         <aside className="block max-h-[50vh] w-full overflow-y-auto border-b border-chrome-border bg-chrome-pane sm:hidden">
           {content}
         </aside>
