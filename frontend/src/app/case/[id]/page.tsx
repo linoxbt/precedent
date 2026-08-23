@@ -1,16 +1,18 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import {
   domainDisplayName,
   getCase,
   getDomain,
   getDomainPrecedents,
   getRuling,
+  retryRead,
 } from "@/lib/genlayerClient";
 import VerdictCard from "@/components/VerdictCard";
 import RationaleWithCitations from "@/components/RationaleWithCitations";
 import StatusBar from "@/components/StatusBar";
 import CaseMessages from "@/components/CaseMessages";
+import PendingRuling from "@/components/PendingRuling";
+import PendingCase from "@/components/PendingCase";
 import { DocumentIcon } from "@/components/icons";
 import { getActiveNetworkServer } from "@/lib/activeNetworkServer";
 
@@ -26,10 +28,17 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function CaseRulingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const network = await getActiveNetworkServer();
-  const [caseRecord, ruling] = await Promise.all([getCase(network, id), getRuling(network, id)]);
+  // A short retry on the case read: right after submit_case's write just
+  // finalized, a read can still lag a few seconds behind (see README's
+  // storage-encoder/read-lag notes), and this page is exactly where a
+  // freshly submitted case lands, so a first-attempt miss shouldn't 404.
+  const [caseRecord, ruling] = await Promise.all([
+    retryRead(() => getCase(network, id), 4),
+    getRuling(network, id),
+  ]);
 
-  if (!caseRecord || !ruling) {
-    notFound();
+  if (!caseRecord) {
+    return <PendingCase network={network} caseId={id} />;
   }
 
   const [domain, precedents] = await Promise.all([
@@ -61,12 +70,18 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
           <p className="label mb-2">Case Description</p>
           <p className="mb-6 text-sm leading-relaxed text-ink-muted">{caseRecord.description}</p>
 
-          <VerdictCard outcome={ruling.outcome} confidence={ruling.confidence} round={ruling.round} />
+          {ruling ? (
+            <>
+              <VerdictCard outcome={ruling.outcome} confidence={ruling.confidence} round={ruling.round} />
 
-          <div className="panel mt-4 p-5">
-            <p className="label mb-3">Rationale</p>
-            <RationaleWithCitations rationale={ruling.rationale} precedents={precedents} />
-          </div>
+              <div className="panel mt-4 p-5">
+                <p className="label mb-3">Rationale</p>
+                <RationaleWithCitations rationale={ruling.rationale} precedents={precedents} />
+              </div>
+            </>
+          ) : (
+            <PendingRuling network={network} caseId={caseRecord.id} />
+          )}
 
           <CaseMessages
             network={network}
@@ -124,18 +139,24 @@ export default async function CaseRulingPage({ params }: { params: Promise<{ id:
                 ))}
               </dd>
             </div>
-            <div>
-              <dt className="text-ink-faint">Cited precedents</dt>
-              <dd className="text-ink-muted">{ruling.citedPrecedentIds.length}</dd>
-            </div>
+            {ruling && (
+              <div>
+                <dt className="text-ink-faint">Cited precedents</dt>
+                <dd className="text-ink-muted">{ruling.citedPrecedentIds.length}</dd>
+              </div>
+            )}
           </dl>
         </aside>
       </div>
 
       <StatusBar>
         <span>{caseRecord.evidenceRefs.length} evidence item{caseRecord.evidenceRefs.length === 1 ? "" : "s"}</span>
-        <span className="text-ink-faint">·</span>
-        <span>{ruling.citedPrecedentIds.length} citation{ruling.citedPrecedentIds.length === 1 ? "" : "s"}</span>
+        {ruling && (
+          <>
+            <span className="text-ink-faint">·</span>
+            <span>{ruling.citedPrecedentIds.length} citation{ruling.citedPrecedentIds.length === 1 ? "" : "s"}</span>
+          </>
+        )}
       </StatusBar>
     </div>
   );

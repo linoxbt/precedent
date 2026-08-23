@@ -143,6 +143,7 @@ export default function SubmitCasePage() {
         provider,
         acct
       );
+      stepTimers.forEach(clearTimeout);
       router.push(`/case/${caseId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ruling failed. Try again.");
