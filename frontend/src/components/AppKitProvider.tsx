@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { WagmiProvider } from "wagmi";
 import { REOWN_PROJECT_ID, networks, wagmiAdapter } from "@/lib/wagmiConfig";
 import { NetworkProvider } from "@/lib/NetworkProvider";
+import { NavPaneProvider } from "@/lib/NavPaneProvider";
 
 if (REOWN_PROJECT_ID) {
   createAppKit({
@@ -29,7 +30,9 @@ export default function AppKitProvider({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiAdapter.wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <NetworkProvider>{children}</NetworkProvider>
+        <NetworkProvider>
+          <NavPaneProvider>{children}</NavPaneProvider>
+        </NetworkProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

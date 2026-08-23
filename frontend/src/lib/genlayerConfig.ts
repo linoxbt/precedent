@@ -14,10 +14,15 @@ export interface GenLayerNetworkConfig {
   contractAddress?: Address;
 }
 
-function envAddress(name: string): Address | undefined {
-  const v = process.env[name];
-  return v ? (v as Address) : undefined;
-}
+// Next.js's bundler only inlines `process.env.NEXT_PUBLIC_*` into the client
+// bundle when it sees a literal, statically-analyzable member access; a
+// dynamic `process.env[name]` lookup is invisible to it and silently
+// resolves to undefined client-side (while still working server-side,
+// where real process.env is available at runtime). Each var is therefore
+// referenced literally below, not through a helper keyed by string.
+const ADDRESS_ASIMOV = process.env.NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_ASIMOV as Address | undefined;
+const ADDRESS_BRADBURY = process.env.NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_BRADBURY as Address | undefined;
+const ADDRESS_STUDIO = process.env.NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_STUDIO as Address | undefined;
 
 export const GENLAYER_NETWORKS: Record<GenLayerNetworkKey, GenLayerNetworkConfig> = {
   asimov: {
@@ -27,7 +32,7 @@ export const GENLAYER_NETWORKS: Record<GenLayerNetworkKey, GenLayerNetworkConfig
     chain: chains.testnetAsimov,
     rpcUrl: process.env.NEXT_PUBLIC_GENLAYER_RPC_URL_ASIMOV || chains.testnetAsimov.rpcUrls.default.http[0],
     explorerUrl: chains.testnetAsimov.blockExplorers?.default.url ?? "",
-    contractAddress: envAddress("NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_ASIMOV"),
+    contractAddress: ADDRESS_ASIMOV || undefined,
   },
   bradbury: {
     key: "bradbury",
@@ -36,7 +41,7 @@ export const GENLAYER_NETWORKS: Record<GenLayerNetworkKey, GenLayerNetworkConfig
     chain: chains.testnetBradbury,
     rpcUrl: process.env.NEXT_PUBLIC_GENLAYER_RPC_URL_BRADBURY || chains.testnetBradbury.rpcUrls.default.http[0],
     explorerUrl: chains.testnetBradbury.blockExplorers?.default.url ?? "",
-    contractAddress: envAddress("NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_BRADBURY"),
+    contractAddress: ADDRESS_BRADBURY || undefined,
   },
   studio: {
     key: "studio",
@@ -44,7 +49,7 @@ export const GENLAYER_NETWORKS: Record<GenLayerNetworkKey, GenLayerNetworkConfig
     chain: chains.studionet,
     rpcUrl: process.env.NEXT_PUBLIC_GENLAYER_RPC_URL_STUDIO || chains.studionet.rpcUrls.default.http[0],
     explorerUrl: chains.studionet.blockExplorers?.default.url ?? "",
-    contractAddress: envAddress("NEXT_PUBLIC_PRECEDENT_ENGINE_ADDRESS_STUDIO"),
+    contractAddress: ADDRESS_STUDIO || undefined,
   },
 };
 
